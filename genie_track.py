@@ -79,8 +79,8 @@ class Genie_tracking:
                  save_dir = 'C:/git_repos/GLO/Tutorials/tracking/',
                  show_display=True,
                  screen_res = (1280,800),
-                 UDP_IP,
-                 UDP_PORT
+                 UDP_IP = "127.0.0.1",
+                 UDP_PORT = 8080
                  ):
         
         #Initialize parameters
@@ -573,8 +573,8 @@ if __name__ == '__main__':
                         track_time=track_time,
                         save_dir=save_dir,
                         show_display=show_display,
-                        UDP_IP,
-                        UDP_PORT
+                        UDP_IP=UDP_IP,
+                        UDP_PORT=UDP_PORT
                         )
     
     print('Tracking with genie camera for',track_time,'seconds')
