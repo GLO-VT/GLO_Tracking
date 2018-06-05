@@ -152,8 +152,11 @@ class Genie_tracking:
         #If SS angle offsets are within bounds, generate PID error signal and ptu command
         try:
             if (self.ang_x_track > -5) & (self.ang_x_track < 5):
-                self.outv_x = self.pid_x.GenOut(self.ang_x)  #generate x-axis control output in degrees
+                print('ang_x_track',self.ang_x_track)
+                self.outv_x = self.pid_x.GenOut(self.ang_x_track)  #generate x-axis control output in degrees
                 self.ptu_cmd_x = self.outv_x*self.pid_x.deg2pos  #convert to PTU positions
+                print('commands ',self.ptu_cmd_x,self.ptu_cmd_y)
+                #print('test')
                 self.ptu.cmd('po'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
                 time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
             else:
@@ -161,7 +164,7 @@ class Genie_tracking:
                 self.ptu_cmd_x = np.nan
             
             if (self.ang_y_track > -5) & (self.ang_y_track < 5):
-                self.outv_y = self.pid_x.GenOut(self.ang_y)  #generate y-axis control output in degrees
+                self.outv_y = self.pid_y.GenOut(self.ang_y_track)  #generate y-axis control output in degrees
                 self.ptu_cmd_y = self.outv_y*self.pid_y.deg2pos  #convert to PTU positions
                 self.ptu.cmd('to'+str(self.ptu_cmd_y)+' ')    #Send PTU command to tilt axis
                 time.sleep(self.ptu_cmd_delay)
@@ -182,7 +185,7 @@ class Genie_tracking:
         #If SS angle offsets are within bounds, generate PID error signal and ptu command
         try:
             if (self.ang_x_track > -5) & (self.ang_x_track < 5):
-                self.outv_x = self.pid_x.GenOut(self.ang_x)  #generate x-axis control output in degrees
+                self.outv_x = self.pid_x.GenOut(self.ang_x_track)  #generate x-axis control output in degrees
                 self.ptu_cmd_x = self.outv_x*self.pid_x.deg2pos  #convert to PTU positions
                 self.ptu.cmd('ps'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
                 time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
@@ -191,7 +194,7 @@ class Genie_tracking:
                 self.ptu_cmd_x = np.nan
             
             if (self.ang_y_track > -5) & (self.ang_y_track < 5):
-                self.outv_y = self.pid_x.GenOut(self.ang_y)  #generate y-axis control output in degrees
+                self.outv_y = self.pid_y.GenOut(self.ang_y_track)  #generate y-axis control output in degrees
                 self.ptu_cmd_y = self.outv_y*self.pid_y.deg2pos  #convert to PTU positions
                 self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to tilt axis
                 time.sleep(self.ptu_cmd_delay)   #sleep for set delay between different ptu axis commands
@@ -228,7 +231,8 @@ class Genie_tracking:
                 time.sleep(self.ptu_cmd_delay)
             else:
                 self.outv_y = np.nan
-                self.ptu_cmd_y = np.nan   
+                self.ptu_cmd_y = np.nan  
+            print(self.ptu_cmd_x,self.ptu_cmd_y)
         except:
             print('PTU differential velocity tracking command failed')
             self.ptu_cmd_x = np.nan 
@@ -291,6 +295,8 @@ class Genie_tracking:
             cv2.putText(img,'Offset Y = '+str(round(ang_y,4))+ ' degrees',(int(img.shape[0]/2)-40,80), self.font, self.font_scale,(255,0,255),2,cv2.LINE_AA)
             cv2.putText(img,'Offset Total = '+str(round(ang_off,4))+ ' degrees',(int(img.shape[0]/2)-40,120), self.font, self.font_scale,(255,0,255),2,cv2.LINE_AA)
             cv2.putText(img,'PTU pan Speed = '+str(round(self.spd_last_x/self.pid_x.deg2pos,3))+ ' deg/sec',(int(img.shape[0]/2)-40,160), self.font, self.font_scale,(255,0,255),2,cv2.LINE_AA)
+            cv2.putText(img,'PTU speed x  = '+str(round(self.ptu_cmd_x,3))+str(round(self.ptu_cmd_y,3)),(int(img.shape[0]/2)-40,200), self.font, self.font_scale,(255,0,255),2,cv2.LINE_AA)
+            
             cv2.circle(img, (int(img.shape[0]/2),int(img.shape[1]/2)), pix_off_tot, (255, 255, 255), 2)
             cv2.circle(img, (pix_off_x,pix_off_y), 10, (255, 255, 255), -1)
         cv2.imshow('doin stuff', img)
@@ -356,9 +362,9 @@ class Genie_tracking:
                     self.ss[i-1].read_data_all()    #Read all data from sun sensor using SS class      
             
             #Read x and y camera degree offsets corresponding to center of the sun
-            data, addr = self.sock.recvfrom(1024) # buffer size is 1024 bytes
-            self.ang_x_track = float(data.encode().split(',')[0])
-            self.ang_y_track = float(data.encode().split(',')[1])
+            data, addr = self.sock.recvfrom(22) # buffer size is 1024 bytes
+            self.ang_x_track = float(data.decode().split(',')[0])
+            self.ang_y_track = float(data.decode().split(',')[1])
             print('sun center at ',self.ang_x_track,self.ang_y_track)
             
             #Feed into PID and create appropriate PTU command
@@ -436,37 +442,38 @@ if __name__ == '__main__':
     
     #Define PID control gains
     #pan-axis gains
-    kp_x=0.3
+    kp_x=0.3*0.1
     ki_x=0.05*0
-    kd_x=0.3
+    kd_x=0.3*0.1
     
     #tilt-axis gains
-    kp_y=-0.3
+    kp_y=-0.3*0
     ki_y=0.01*0
-    kd_y=-0.3
+    kd_y=-0.3*0
     
     #Define data collection parameters
-    track_time=5  #number of seconds to capture data/track
+    track_time=120  #number of seconds to capture data/track
     hz=10      #data sample rate   
     cnt=0
     delay = 1.0/hz
     
     #Define directory to save data in
-    save_dir = 'C:/git_repos/GLO/Tutorials/tracking/'
+    #save_dir = 'C:/git_repos/GLO/Tutorials/tracking/'
+    save_dir= 'C:/Users/Bobby/Documents/GitHub/GLO_Tracking/'
 
     #Obtain ephemeris data
     ep = ephem.Observer()
 
     #Establish communication with sun sensor/s - store in a list
-    ss=[SS(inst_id=1,com_port='COM4',baudrate=115200),
+    ss=[SS(inst_id=1,com_port='COM7',baudrate=115200),
         SS(inst_id=2,com_port='COM4',baudrate=115200),
-        SS(inst_id=3,com_port='COM4',baudrate=115200)]
+        SS(inst_id=3,com_port='COM7',baudrate=115200)]
     
     #List of sun sensors to read data from
-    ss_read = [1,3]
+    ss_read = [2,3]
     
     #List of sun sensors to use for tracking
-    ss_track = [1,3]
+    ss_track = [2,3]
     
 #    ss_eshim_x = [-1.763, -1.547, -1.578]          #Specify electronic shims (x-dir) for sun sensors
 #    ss_eshim_y = [-2.290, -2.377, -2.215]          #Specify electronic shims (y-dir) for sun sensors
@@ -474,11 +481,11 @@ if __name__ == '__main__':
     ss_eshim_y = [0.0,0.0,0.0]          #Specify electronic shims (y-dir) for sun sensors
 
     #Establish communication with IMU
-    imu=IMU(com_port='COM7',baudrate=115200)
+    imu=IMU(com_port='COM5',baudrate=115200)
     
     #Establish communication with PTU
     ptu_cmd_delay=0.025
-    ptu = PTU(com_port='COM5',baudrate=9600,cmd_delay=ptu_cmd_delay)
+    ptu = PTU(com_port='COM6',baudrate=9600,cmd_delay=ptu_cmd_delay)
     #Set latitude, longitude and altitude to Blacksburg, VA for sun pointing
     ptu.lat, ptu.lon, ptu.alt = '37.205144','-80.417560', 634
     ptu.utc_off=4   #Set UTC time offset of EST
