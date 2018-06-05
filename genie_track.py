@@ -80,7 +80,8 @@ class Genie_tracking:
                  show_display=True,
                  screen_res = (1280,800),
                  UDP_IP = "127.0.0.1",
-                 UDP_PORT = 8080
+                 UDP_PORT = 8080,
+                 read_data_dir = None
                  ):
         
         #Initialize parameters
@@ -103,6 +104,7 @@ class Genie_tracking:
         self.screen_res = screen_res
         self.UDP_IP = UDP_IP
         self.UDP_PORT = UDP_PORT
+        self.read_data_dir = read_data_dir
         
         #Initialized dataframe to store data  
         #Do not save sun sensor data if ss_read list is empty
@@ -140,9 +142,10 @@ class Genie_tracking:
             self.reg_y = 4
             
         #Initialize UDP Socket to capture camera data (x,y sun center pixels)
-        self.sock = socket.socket(socket.AF_INET, # Internet
-                     socket.SOCK_DGRAM) # UDP
-        self.sock.bind((UDP_IP, UDP_PORT))
+        if self.UDP_PORT != None:
+            self.sock = socket.socket(socket.AF_INET, # Internet
+                         socket.SOCK_DGRAM) # UDP
+            self.sock.bind((UDP_IP, UDP_PORT))
         
     def track_pos(self):
         '''
@@ -361,10 +364,24 @@ class Genie_tracking:
                 for i in ss_read:    #Loop through all sun sensors
                     self.ss[i-1].read_data_all()    #Read all data from sun sensor using SS class      
             
-            #Read x and y camera degree offsets corresponding to center of the sun
-            data, addr = self.sock.recvfrom(22) # buffer size is 1024 bytes
-            self.ang_x_track = float(data.decode().split(',')[0])
-            self.ang_y_track = float(data.decode().split(',')[1])
+            #Read data from UDP port if UDP is setup
+            if self.UDP_PORT != None:
+                try:
+                    #Read x and y camera degree offsets corresponding to center of the sun
+                    data, addr = self.sock.recvfrom(22) # buffer size is 1024 bytes
+                    self.ang_x_track = float(data.decode().split(',')[0])
+                    self.ang_y_track = float(data.decode().split(',')[1])
+                except:
+                    print('Could not read data from UDP port')
+            #Otherwise try and read the data from file
+            else:
+                try:
+                    with open(self.read_data_dir) as f:
+                        data = f.read()
+                        self.ang_x_track = float(data.split(',')[0])
+                        self.ang_y_track = float(data.split(',')[1])
+                except:
+                    print('Could not read camera degree offsets from file')
             print('sun center at ',self.ang_x_track,self.ang_y_track)
             
             #Feed into PID and create appropriate PTU command
@@ -439,6 +456,9 @@ if __name__ == '__main__':
     #UDP port to capture camera x,y pixel data
     UDP_IP = "127.0.0.1"
     UDP_PORT = 8080
+    
+    #Or define a file to read data from
+    read_data_dir = "C:\git_repos\GLO_Tracking\camera_data.txt"
     
     #Define PID control gains
     #pan-axis gains
@@ -582,6 +602,7 @@ if __name__ == '__main__':
                         show_display=show_display,
                         UDP_IP=UDP_IP,
                         UDP_PORT=UDP_PORT
+                        read_data_dir=read_data_dir
                         )
     
     print('Tracking with genie camera for',track_time,'seconds')
