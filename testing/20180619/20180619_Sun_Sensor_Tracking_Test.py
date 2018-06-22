@@ -199,6 +199,8 @@ plt.ylim((0,1))
 plt.legend()
 
 print('Laptop Stats 95th percentile')
+plt.figure()
+bp=[] #list to store boxplots in
 for i in range(data_all_ss1['run'].max()):
     mask = (data_all_ss1['run'] == i+1)
     delay = int(7.6*20)  #Allow for 20 second settling period
@@ -212,9 +214,13 @@ for i in range(data_all_ss1['run'].max()):
           'kpy=',data_all_ss1.loc[mask,'kpy'][0],
           'kdx=',data_all_ss1.loc[mask,'kdx'][0],
           'kdy=',data_all_ss1.loc[mask,'kdy'][0])
+    bp.append(data_all_ss1.loc[mask,'ang_x_raw'][delay:])
+plt.boxplot(bp) #plot boxplots of all data
 
 print('')
-print('Raspberry Pi Stats 95th percentile')    
+print('Raspberry Pi Stats 95th percentile')  
+plt.figure() 
+bp=[] #list to store boxplots in
 for i in range(data_rpi_all_ss1['run'].max()):
     mask = (data_rpi_all_ss1['run'] == i+1)
     delay = int(7.6*20)  #Allow for 20 second settling period
@@ -228,6 +234,8 @@ for i in range(data_rpi_all_ss1['run'].max()):
           'kpy=',data_rpi_all_ss1.loc[mask,'kpy'][0],
           'kdx=',data_rpi_all_ss1.loc[mask,'kdx'][0],
           'kdy=',data_rpi_all_ss1.loc[mask,'kdy'][0])
+    bp.append(data_rpi_all_ss1.loc[mask,'ang_x_raw'][delay:])
+plt.boxplot(bp) #plot boxplots of all data
 
 #Plot data for run 9: tracking within 0.1deg for 47% of time
 plt.figure()
