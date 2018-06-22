@@ -9,9 +9,26 @@ from glob import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn import linear_model
+#from sklearn import linear_model
 import os
+import matplotlib as mpl
 cwd = os.getcwd()
+
+################################################################################
+base_size=15
+mpl.rcParams['legend.fontsize'] = base_size
+mpl.rcParams['figure.figsize'] = (15,10)
+mpl.rcParams['figure.titlesize']=base_size+5
+mpl.rcParams['xtick.labelsize']=base_size
+mpl.rcParams['ytick.labelsize']=base_size
+mpl.rcParams['font.size']=base_size
+mpl.rcParams['axes.titlesize']=base_size
+mpl.rcParams['axes.labelsize']=base_size
+mpl.rcParams['lines.markersize'] = 4           # markersize, in points
+mpl.rcParams['legend.markerscale'] = 1     # line width in points
+mpl.rcParams['lines.markeredgewidth'] = 0.2 # the line width around the marker symbol
+mpl.rcParams['lines.linewidth'] = 1.5
+#####################################
 
 #Function to organize tracking data
 def grab_data(data_loc,params_loc):
@@ -85,6 +102,7 @@ mask = (data_all_ss1['elapsed'] > start) & (data_all_ss1['elapsed'] < stop)
 x=data_all_ss1.loc[mask,'elapsed']
 y=data_all_ss1.loc[mask,'diff']
 plt.plot(x,y,'o',label='Time Difference b/w succesive samples')
+plt.title('Laptop Samppling Frequency')
 plt.xlabel('Time (seconds)')
 plt.ylabel('Seconds')
 plt.ylim((0.09,0.17))
@@ -98,7 +116,7 @@ mask = (data_rpi_all_ss1['elapsed'] > start) & (data_rpi_all_ss1['elapsed'] < st
 x=data_rpi_all_ss1.loc[mask,'elapsed']
 y=data_rpi_all_ss1.loc[mask,'diff']
 plt.plot(x,y,'o',label='Time Difference b/w succesive samples')
-plt.plot('Raspberry Pi Samppling Frequency')
+plt.title('Raspberry Pi Samppling Frequency')
 plt.xlabel('Time (seconds)')
 plt.ylabel('Seconds')
 plt.ylim((0.150,0.275))
@@ -135,33 +153,81 @@ ss_eshim_y = [0.0,0.0,0.0]
 plt.figure()
 start=0
 stop=data_all_ss1['elapsed'][-1]
-mask = (data_all_ss1['elapsed'] > start) & (data_all_ss1['elapsed'] < stop)
-x=data_all_ss1.loc[mask,'elapsed']
-y=data_all_ss1.loc[mask,'ang_x_raw']
-plt.plot(x,y,'o',label='ang_x_raw SS1')
+mask_70 = data_all_ss1['run'] <= 8
+mask_210 = data_all_ss1['run'] > 8
+x_70=data_all_ss1.loc[mask_70,'elapsed']
+x_210=data_all_ss1.loc[mask_210,'elapsed']
+y_70=data_all_ss1.loc[mask_70,'ang_x_raw']
+y_210=data_all_ss1.loc[mask_210,'ang_x_raw']
+plt.plot(x_70,y_70,'o',label='ang_x_raw 70 lbs')
+plt.plot(x_210,y_210,'o',label='ang_x_raw 210 lbs')
 plt.xlabel('Time (seconds)')
 plt.ylabel('Degrees')
+for i in range(data_all_ss1['run'].max()):
+    mask_run=data_all_ss1['run'] == i+1
+    plt.axvline(data_all_ss1.loc[mask_run,'elapsed'][0],color='k')
 plt.title('Raw x-angle offset SS1 for all runs')
 plt.ylim((-1,1))
 plt.legend()
 
 plt.figure()
-y=data_all_ss1.loc[mask,'ang_y_raw']
-plt.plot(x,y,'o',label='ang_y_raw SS1')
+y_70=data_all_ss1.loc[mask_70,'ang_y_raw']
+y_210=data_all_ss1.loc[mask_210,'ang_y_raw']
+plt.plot(x_70,y_70,'o',label='ang_y_raw 70 lbs')
+plt.plot(x_210,y_210,'o',label='ang_y_raw 210 lbs')
 plt.xlabel('Time (seconds)')
 plt.ylabel('Degrees')
+for i in range(data_all_ss1['run'].max()):
+    mask_run=data_all_ss1['run'] == i+1
+    plt.axvline(data_all_ss1.loc[mask_run,'elapsed'][0],color='k')
 plt.title('Raw x-angle offset SS1 for all runs')
 plt.ylim((-1,1))
 plt.legend()
 
 plt.figure()
-y=np.sqrt(data_all_ss1.loc[mask,'ang_y_raw']**2 + data_all_ss1.loc[mask,'ang_y_raw']**2)
-plt.plot(x,y,'o',label='ang_y_raw SS1')
+y_70=np.sqrt(data_all_ss1.loc[mask_70,'ang_y_raw']**2 + data_all_ss1.loc[mask_70,'ang_y_raw']**2)
+y_210=np.sqrt(data_all_ss1.loc[mask_210,'ang_y_raw']**2 + data_all_ss1.loc[mask_210,'ang_y_raw']**2)
+plt.plot(x_70,y_70,'o',label='ang_total_raw 70 lbs')
+plt.plot(x_210,y_210,'o',label='ang_total_raw 210 lbs')
 plt.xlabel('Time (seconds)')
 plt.ylabel('Degrees')
+for i in range(data_all_ss1['run'].max()):
+    mask_run=data_all_ss1['run'] == i+1
+    plt.axvline(data_all_ss1.loc[mask_run,'elapsed'][0],color='k')
 plt.title('Raw total angle offset SS1 for all runs')
 plt.ylim((0,1))
 plt.legend()
+
+print('Laptop Stats 95th percentile')
+for i in range(data_all_ss1['run'].max()):
+    mask = (data_all_ss1['run'] == i+1)
+    delay = int(7.6*20)  #Allow for 20 second settling period
+    percentile=0.95
+    p_x=round(data_all_ss1.loc[mask,'ang_x_raw'][delay:].quantile(percentile),4)
+    p_y=round(data_all_ss1.loc[mask,'ang_y_raw'][delay:].quantile(percentile),4)
+    print('run',i+1,
+          'x-off=',p_x,
+          'y-off=',p_y,
+          'kpx=',data_all_ss1.loc[mask,'kpx'][0],
+          'kpy=',data_all_ss1.loc[mask,'kpy'][0],
+          'kdx=',data_all_ss1.loc[mask,'kdx'][0],
+          'kdy=',data_all_ss1.loc[mask,'kdy'][0])
+
+print('')
+print('Raspberry Pi Stats 95th percentile')    
+for i in range(data_rpi_all_ss1['run'].max()):
+    mask = (data_rpi_all_ss1['run'] == i+1)
+    delay = int(7.6*20)  #Allow for 20 second settling period
+    percentile=0.95
+    p_x=round(data_rpi_all_ss1.loc[mask,'ang_x_raw'][delay:].quantile(percentile),4)
+    p_y=round(data_rpi_all_ss1.loc[mask,'ang_y_raw'][delay:].quantile(percentile),4)
+    print('run',i+1,
+          'x-off=',p_x,
+          'y-off=',p_y,
+          'kpx=',data_rpi_all_ss1.loc[mask,'kpx'][0],
+          'kpy=',data_rpi_all_ss1.loc[mask,'kpy'][0],
+          'kdx=',data_rpi_all_ss1.loc[mask,'kdx'][0],
+          'kdy=',data_rpi_all_ss1.loc[mask,'kdy'][0])
 
 #Plot data for run 9: tracking within 0.1deg for 47% of time
 plt.plot()
