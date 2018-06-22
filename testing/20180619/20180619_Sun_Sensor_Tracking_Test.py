@@ -230,7 +230,7 @@ for i in range(data_rpi_all_ss1['run'].max()):
           'kdy=',data_rpi_all_ss1.loc[mask,'kdy'][0])
 
 #Plot data for run 9: tracking within 0.1deg for 47% of time
-plt.plot()
+plt.figure()
 run=9
 mask = data_all_ss1['run'] == run
 x=data_all_ss1.loc[mask,'elapsed']
@@ -245,7 +245,7 @@ plt.ylim((-0.0,0.4))
 plt.legend()
 
 #Plot data for run 9: accel vs. x-offset
-plt.plot()
+plt.figure()
 run=9
 mask = data_all_ss1['run'] == run
 x=data_all_ss1.loc[mask,'accel']
@@ -257,10 +257,6 @@ plt.xlabel('Acceleration (deg/sec^2)')
 plt.ylabel('Degrees')
 plt.title('Run'+str(run)+' acceleration vs. x-offset')
 plt.ylim((-0.4,0.4))
-
-for i in range(data_all_ss1['run'].max()):
-    mask = data_all_ss1['run'] == i+1
-    print('run',i+1,'kpx=',data_all_ss1.loc[mask,'kpx'][0])
 
 #for ss in ['ss1','ss2','ss3']:
 #    for key in data[ss].keys():
