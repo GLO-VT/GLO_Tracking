@@ -11,7 +11,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn import linear_model
 import os
+import matplotlib as mpl
 cwd = os.getcwd()
+
+################################################################################
+base_size=15
+mpl.rcParams['legend.fontsize'] = base_size
+mpl.rcParams['figure.figsize'] = (15,10)
+mpl.rcParams['figure.titlesize']=base_size+5
+mpl.rcParams['xtick.labelsize']=base_size
+mpl.rcParams['ytick.labelsize']=base_size
+mpl.rcParams['font.size']=base_size
+mpl.rcParams['axes.titlesize']=base_size
+mpl.rcParams['axes.labelsize']=base_size
+mpl.rcParams['lines.markersize'] = 4           # markersize, in points
+mpl.rcParams['legend.markerscale'] = 1     # line width in points
+mpl.rcParams['lines.markeredgewidth'] = 0.2 # the line width around the marker symbol
+mpl.rcParams['lines.linewidth'] = 1.5
+#####################################
 
 #Function to organize tracking data
 def grab_data(data_loc,params_loc):
@@ -195,6 +212,114 @@ plt.ylim((-0.4,0.4))
 for i in range(data_all_ss1['run'].max()):
     mask = data_all_ss1['run'] == i+1
     print('run',i+1,'kpx=',data_all_ss1.loc[mask,'kpx'][0])
+    
+
+#Plot all laptop runs
+mpl.rcParams['figure.figsize'] = (20,20)
+mpl.rcParams['lines.linewidth'] = 3.0
+plot_x_off=True
+plot_imu_ang_z=True
+plot_accel=True
+plot_ptu_cmd_x=True
+plot_autoscale=False
+
+for i in range(17):
+    plt.figure()
+    run=i+1
+    mask = data_all_ss1['run'] == run
+    x=data_all_ss1.loc[mask,'elapsed']-data_all_ss1.loc[mask,'elapsed'][0]
+    y1=data_all_ss1.loc[mask,'ang_x_track']
+    y2=data_all_ss1.loc[mask,'ang_y_track']
+    y3=data_all_ss1.loc[mask,'imu_ang_z']/6
+    y4=data_all_ss1.loc[mask,'accel']
+    y5=data_all_ss1.loc[mask,'ptu_cmd_x']/data_all_ss1.loc[mask,'ptu_cmd_x'].max()
+    y6=data_all_ss1.loc[mask,'ptu_cmd_y']/data_all_ss1.loc[mask,'ptu_cmd_y'].max()
+    percentile=0.95
+    p_x=str(round(y1.quantile(percentile),4))
+    p_y=str(round(y2.quantile(percentile),4))
+    if plot_x_off==True:
+        plt.subplot(2,1,1)
+        plt.plot(x,y1,label='ang_x_track run'+str(run)+'\n'+str(percentile*100)+'% percentile='+p_x+' deg')
+        plt.title('X-angle offset(mean of all 3 sensors) for run'+str(run)+
+                  '\nkpx='+str(data_all_ss1.loc[mask,'kpx'][0])+
+                   ' kpy='+str(data_all_ss1.loc[mask,'kpy'][0])+
+                   ' kdx='+str(data_all_ss1.loc[mask,'kdx'][0])+
+                   ' kdy='+str(data_all_ss1.loc[mask,'kdy'][0])+
+                   '\n'+str(percentile*100)+'% percentile='+p_x+' deg')
+        plt.subplot(2,1,2)
+        plt.title('Y-angle offset(mean of all 3 sensors) for run'+str(run)+
+          '\nkpx='+str(data_all_ss1.loc[mask,'kpx'][0])+
+           ' kpy='+str(data_all_ss1.loc[mask,'kpy'][0])+
+           ' kdx='+str(data_all_ss1.loc[mask,'kdx'][0])+
+           ' kdy='+str(data_all_ss1.loc[mask,'kdy'][0])+
+           '\n'+str(percentile*100)+'% percentile='+p_y+' deg')
+        plt.plot(x,y2,label='ang_y_track run'+str(run)+'\n'+str(percentile*100)+'% percentile='+p_y+' deg')
+    if plot_imu_ang_z==True:
+        plt.subplot(2,1,1)
+        plt.plot(x,y3,label='imu_ang_z')
+        plt.subplot(2,1,2)
+        plt.plot(x,y3,label='imu_ang_z')
+    if plot_accel == True:
+        plt.subplot(2,1,1)
+        plt.plot(x,y4,label='accel')
+        plt.subplot(2,1,2)
+        plt.plot(x,y4,label='accel')
+    if plot_ptu_cmd_x==True:
+        plt.subplot(2,1,1)
+        plt.plot(x,y5,label='ptu_cmd_X')
+        plt.legend()
+        plt.subplot(2,1,2)
+        plt.plot(x,y6,label='ptu_cmd_y')
+        plt.legend()
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Degrees')
+    if plot_autoscale == False:
+        plt.subplot(2,1,1)
+        plt.ylim((-0.4,0.4))
+        plt.subplot(2,1,2)
+        plt.ylim((-0.4,0.4))
+    plt.subplot(2,1,1)
+    plt.xlim((x[0],x[0]+120))
+    plt.subplot(2,1,2)
+    plt.xlim((x[0],x[0]+120))
+
+  
+def ffts(data,sample_hz):
+    fft_vals = np.absolute(np.fft.rfft(data))
+    fft_freq = np.fft.rfftfreq(len(data), 1.0/sample_hz)
+    return fft_vals,fft_freq
+    
+#Find oscillation frequencies using fft
+#Resample to 5Hz (FFT needs regularly spaced data)
+for i in range(17):
+    print(i)
+    plt.figure()
+    run=i+1
+    sample_hz=10.0
+    sample_hz2=5.0
+    dt=1/sample_hz
+    dt2=1/sample_hz2
+    mask = data_all_ss1['run'] == run
+    y=data_all_ss1.loc[mask,'ang_x_raw']
+    y=y.resample(str(dt)+'S').mean().dropna()
+    y2=y.resample(str(dt2)+'S').mean().dropna()
+    percentile=0.99
+    p=str(round(y.quantile(percentile),4))
+    fft_vals,fft_freq = ffts(y,sample_hz)
+    fft_vals2,fft_freq2 = ffts(y2,sample_hz2)
+#    fft_vals = np.absolute(np.fft.rfft(y))
+#    fft_freq = np.fft.rfftfreq(len(y), 1.0/sample_hz)
+    plt.plot(fft_freq,fft_vals,label='sample hz='+str(sample_hz))
+    plt.plot(fft_freq2,fft_vals2,label='sample hz='+str(sample_hz2))
+    plt.xlabel('Frequency (hz)')
+    plt.ylabel('Amplitude')
+    plt.title('FFT analysis run'+str(run)+
+              '\nkpx='+str(data_all_ss1.loc[mask,'kpx'][0])+
+               ' kpy='+str(data_all_ss1.loc[mask,'kpy'][0])+
+               ' kdx='+str(data_all_ss1.loc[mask,'kdx'][0])+
+               ' kdy='+str(data_all_ss1.loc[mask,'kdy'][0])+
+               '\n'+str(percentile*100)+'% percentile='+p+' deg')
+
 
 #for ss in ['ss1','ss2','ss3']:
 #    for key in data[ss].keys():
