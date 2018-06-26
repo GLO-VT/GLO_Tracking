@@ -23,6 +23,10 @@ class PID:
         self.Ki = 0
         self.sp = 0.0
         
+        #Set inetgrator windup limits
+        self.ilim_lo=0.02
+        self.ilim_hi=1.0
+        
         if step_size == 'eighth':
             self.arcs_deg = 23.1428
         if step_size == 'half':
@@ -77,8 +81,9 @@ class PID:
         de = error - self.prev_err              # get delta error
 
         self.Cp = self.Kp * error               # proportional term
-        self.Ci += error * dt                   # integral term
-
+        #only add latest integral error if error is within integrator windup limits
+        if (error < self.ilim_lo) | (error > self.ilim_hi):   
+            self.Ci += error * dt               # integral term
         self.Cd = 0
         if dt > 0:                              # no div by zero
             self.Cd = de/dt                     # derivative term
