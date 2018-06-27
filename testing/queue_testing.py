@@ -58,13 +58,19 @@ def sunsensor_read(delay,
         time_ss1_1=time.time()
         ss1_tstamp=(time_ss1_1-time_ss1_0)/2.
         if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-            SS1_x_offset_queue.put(ss1.ang_x_filt + ss_eshim_x[0])   #add electronic shims to angle offset for tracking
-            SS1_y_offset_queue.put(ss1.ang_y_filt + ss_eshim_y[0])
-            SS1_time_offset_queue.put(ss1_tstamp)  
+            if(SS1_x_offset_queue.full()==False):
+                SS1_x_offset_queue.put(ss1.ang_x_filt + ss_eshim_x[0])   #add electronic shims to angle offset for tracking
+            if(SS1_y_offset_queue.full()==False):
+                SS1_y_offset_queue.put(ss1.ang_y_filt + ss_eshim_y[0])
+            if(SS1_time_offset_queue.full()==False):
+                SS1_time_offset_queue.put(ss1_tstamp)  
         else:
-            SS1_x_offset_queue.put(ss1.ang_x_raw + ss_eshim_x[0])   #add electronic shims to angle offset for tracking
-            SS1_y_offset_queue.put(ss1.ang_y_raw + ss_eshim_y[0])
-            SS1_time_offset_queue.put(ss1_tstamp)
+            if(SS1_x_offset_queue.full()==False):
+                SS1_x_offset_queue.put(ss1.ang_x_raw + ss_eshim_x[0])   #add electronic shims to angle offset for tracking
+            if(SS1_y_offset_queue.full()==False):
+                SS1_y_offset_queue.put(ss1.ang_y_raw + ss_eshim_y[0])
+            if(SS1_time_offset_queue.full()==False):
+                SS1_time_offset_queue.put(ss1_tstamp)
         
         #SS2
         time_ss2_0=time.time()
@@ -72,13 +78,19 @@ def sunsensor_read(delay,
         time_ss2_1=time.time()
         ss2_tstamp=(time_ss2_1-time_ss2_0)/2.
         if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-            SS2_x_offset_queue.put(ss2.ang_x_filt + ss_eshim_x[1])   #add electronic shims to angle offset for tracking
-            SS2_y_offset_queue.put(ss2.ang_y_filt + ss_eshim_y[1])
-            SS2_time_offset_queue.put(ss2_tstamp)  
+            if(SS2_x_offset_queue.full()==False):
+                SS2_x_offset_queue.put(ss2.ang_x_filt + ss_eshim_x[1])   #add electronic shims to angle offset for tracking
+            if(SS2_y_offset_queue.full()==False):
+                SS2_y_offset_queue.put(ss2.ang_y_filt + ss_eshim_y[1])
+            if(SS2_time_offset_queue.full()==False):
+                SS2_time_offset_queue.put(ss2_tstamp)  
         else:
-            SS2_x_offset_queue.put(ss2.ang_x_raw + ss_eshim_x[1])   #add electronic shims to angle offset for tracking
-            SS2_y_offset_queue.put(ss2.ang_y_raw + ss_eshim_y[1])
-            SS2_time_offset_queue.put(ss2_tstamp)
+            if(SS2_x_offset_queue.full()==False):
+                SS2_x_offset_queue.put(ss2.ang_x_raw + ss_eshim_x[1])   #add electronic shims to angle offset for tracking
+            if(SS2_y_offset_queue.full()==False):
+                SS2_y_offset_queue.put(ss2.ang_y_raw + ss_eshim_y[1])
+            if(SS2_time_offset_queue.full()==False):
+                SS2_time_offset_queue.put(ss2_tstamp)
             
         #SS3
         time_ss3_0=time.time()
@@ -86,13 +98,19 @@ def sunsensor_read(delay,
         time_ss3_1=time.time()
         ss3_tstamp=(time_ss3_1-time_ss3_0)/2.
         if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-            SS3_x_offset_queue.put(ss3.ang_x_filt + ss_eshim_x[2])   #add electronic shims to angle offset for tracking
-            SS3_y_offset_queue.put(ss3.ang_y_filt + ss_eshim_y[2])
-            SS3_time_offset_queue.put(ss3_tstamp)  
+            if(SS3_x_offset_queue.full()==False):
+                SS3_x_offset_queue.put(ss3.ang_x_filt + ss_eshim_x[2])   #add electronic shims to angle offset for tracking
+            if(SS3_y_offset_queue.full()==False):
+                SS3_y_offset_queue.put(ss3.ang_y_filt + ss_eshim_y[2])
+            if(SS3_time_offset_queue.full()==False):
+                SS3_time_offset_queue.put(ss3_tstamp)  
         else:
-            SS3_x_offset_queue.put(ss3.ang_x_raw + ss_eshim_x[2])   #add electronic shims to angle offset for tracking
-            SS3_y_offset_queue.put(ss3.ang_y_raw + ss_eshim_y[2])
-            SS3_time_offset_queue.put(ss3_tstamp)
+            if(SS3_x_offset_queue.full()==False):
+                SS3_x_offset_queue.put(ss3.ang_x_raw + ss_eshim_x[2])   #add electronic shims to angle offset for tracking
+            if(SS3_y_offset_queue.full()==False):
+                SS3_y_offset_queue.put(ss3.ang_y_raw + ss_eshim_y[2])
+            if(SS3_time_offset_queue.full()==False):
+                SS3_time_offset_queue.put(ss3_tstamp)
         #Ensure you are at the rate    
         time_diff = time.time() - time_ss1_0
         if delay - time_diff > 0:
