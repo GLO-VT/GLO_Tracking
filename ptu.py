@@ -187,7 +187,7 @@ class PTU:
 if __name__ == '__main__':
     
     #Create a ptu object, define com_port and baudrate
-    ptu = PTU(com_port='COM5',baudrate=9600)
+    ptu = PTU(com_port='COM6',baudrate=9600)
     
     #Check PTU step mode in both axes
     print('Step mode pan axis: ',ptu.read('wp '))
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     ptu.utc_off=4   #Set UTC time offset of EST
     
     #Connect to IMU to get offset from magnetic North
-    imu = EzAsyncData.connect('COM7', 115200)
+    imu = EzAsyncData.connect('COM5', 115200)
     
     ptu.ephem_point(ep,imu=imu,target='sun')
     input('Press any key when PTU is pointed at the sun')
