@@ -105,8 +105,6 @@ class Genie_tracking:
         self.UDP_IP = UDP_IP
         self.UDP_PORT = UDP_PORT
         self.read_data_dir = read_data_dir
-        self.ang_x_track=0.0
-        self.ang_y_track=0.0
         
         #Initialized dataframe to store data  
         #Do not save sun sensor data if ss_read list is empty
@@ -382,10 +380,9 @@ class Genie_tracking:
                         data = f.read()
                         self.ang_x_track = float(data.split(',')[0])
                         self.ang_y_track = float(data.split(',')[1])
-                        print('sun center at ',self.ang_x_track,self.ang_y_track)
                 except:
                     print('Could not read camera degree offsets from file')
-                    
+            print('sun center at ',self.ang_x_track,self.ang_y_track)
             
             #Feed into PID and create appropriate PTU command
             if self.track_mode == 1:
@@ -457,22 +454,22 @@ if __name__ == '__main__':
     show_display = True
     
     #UDP port to capture camera x,y pixel data
-    UDP_IP = None#"127.0.0.1"
-    UDP_PORT = None# 8080
+    UDP_IP = "127.0.0.1"
+    UDP_PORT = 8080
     
     #Or define a file to read data from
-    read_data_dir = 'C:/Users/Bobby/Documents/GitHub/GLO_Tracking/Data.txt'
+    read_data_dir = "C:\git_repos\GLO_Tracking\camera_data.txt"
     
     #Define PID control gains
     #pan-axis gains
-    kp_x=0.3
+    kp_x=0.3*0.1
     ki_x=0.05*0
-    kd_x=0.3
+    kd_x=0.3*0.1
     
     #tilt-axis gains
-    kp_y=-0.3
+    kp_y=-0.3*0
     ki_y=0.01*0
-    kd_y=-0.3
+    kd_y=-0.3*0
     
     #Define data collection parameters
     track_time=120  #number of seconds to capture data/track
@@ -604,7 +601,7 @@ if __name__ == '__main__':
                         save_dir=save_dir,
                         show_display=show_display,
                         UDP_IP=UDP_IP,
-                        UDP_PORT=UDP_PORT,
+                        UDP_PORT=UDP_PORT
                         read_data_dir=read_data_dir
                         )
     

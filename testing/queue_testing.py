@@ -11,70 +11,40 @@ name = process name
 target = name of function you are running
 args: parameters needed to pass to function
 '''
-import multiprocessing
-import time
-
-
-DataFetch = multiprocessing.Process(name='DataFetch',target=DataFetch,args=(params.delay,
+ptu_sim = multiprocessing.Process(name='ptu_simulate',target=ptu_simulate,args=(params.delay,
                                                                                  params.track_time,
-                                                                                 params.filter_mode,
                                                                                  params.ss_read,
-                                                                                 params.SS1_id,
-                                                                                 params.SS1_com,
-                                                                                 params.SS1_baudrate,
-                                                                                 params.SS2_id,
-                                                                                 params.SS2_com,
-                                                                                 params.SS2_baudrate,
-                                                                                 params.SS3_id,
-                                                                                 params.SS3_com,
-                                                                                 params.SS3_baudrate))
+                                                                                 params.ptu48_baudrate,
+                                                                                 ptu_cmd_list,
+                                                                                 params.save_loc+'run_'+str(run_num),
+                                                                                 file_prefix,
+                                                                                 params.ptu48_kp,
+                                                                                 params.ptu48_ks,
+                                                                                 params.ptu48_ka,
+                                                                                 params.ptu48_vd,
+                                                                               params.ptu48_pd))
 
 ss_read=[1,2,3]
 
-ss1=SS(inst_id=SS1_id,com_port=SS1_com,baudrate=SS1_baudrate)
-ss2=SS(inst_id=SS2_id,com_port=SS2_com,baudrate=SS2_baudrate)
-ss3=SS(inst_id=SS3_id,com_port=SS3_com,baudrate=SS3_baudrate)
+
+
+ss1=SS(inst_id=1,com_port='COM6',baudrate=115200)
+ss2=SS(inst_id=2,com_port='COM4',baudrate=115200)
+ss3=SS(inst_id=3,com_port='COM8',baudrate=115200)
 
 
 
-#SS1
+    #Loop through all sun sensors
 time_ss1_0=time.time()
-ss1.read_data_all() #Read all data from sun sensor using SS class      
+ss1.read_data_all()    #Read all data from sun sensor using SS class      
 time_ss1_1=time.time()
-ss1_tstamp=(time_ss1_1-time_ss1_0)/2.
-if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-    SS1_x_offset_queue.put(ss1.ang_x_filt + ss_eshim_x[0])   #add electronic shims to angle offset for tracking
-    SS1_y_offset_queue.put(ss1.ang_y_filt + ss_eshim_y[0])
-    SS1_time_offset_queue.put(ss1_tstamp)  
-else:
-    SS1_x_offset_queue.put(ss1.ang_x_raw + ss_eshim_x[0])   #add electronic shims to angle offset for tracking
-    SS1_y_offset_queue.put(ss1.ang_y_raw + ss_eshim_y[0])
-    SS1_time_offset_queue.put(ss1_tstamp)
+ss1_tstamp=time_ss1_1 - (time_ss1_1-time_ss1_0)/2.
+SS1_x_offset.queue = ss1.ang_x_filt + ss_eshim_x[0]    #add electronic shims to angle offset for tracking  
 
-#SS2
-time_ss2_0=time.time()
-ss2.read_data_all() #Read all data from sun sensor using SS class      
-time_ss2_1=time.time()
-ss2_tstamp=(time_ss2_1-time_ss2_0)/2.
+  
 if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-    SS2_x_offset_queue.put(ss2.ang_x_filt + ss_eshim_x[1])   #add electronic shims to angle offset for tracking
-    SS2_y_offset_queue.put(ss2.ang_y_filt + ss_eshim_y[1])
-    SS2_time_offset_queue.put(ss2_tstamp)  
-else:
-    SS2_x_offset_queue.put(ss2.ang_x_raw + ss_eshim_x[1])   #add electronic shims to angle offset for tracking
-    SS2_y_offset_queue.put(ss2.ang_y_raw + ss_eshim_y[1])
-    SS2_time_offset_queue.put(ss2_tstamp)
-    
-#SS3
-time_ss3_0=time.time()
-ss3.read_data_all() #Read all data from sun sensor using SS class      
-time_ss3_1=time.time()
-ss3_tstamp=(time_ss3_1-time_ss3_0)/2.
-if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-    SS3_x_offset_queue.put(ss3.ang_x_filt + ss_eshim_x[2])   #add electronic shims to angle offset for tracking
-    SS3_y_offset_queue.put(ss3.ang_y_filt + ss_eshim_y[2])
-    SS3_time_offset_queue.put(ss3_tstamp)  
-else:
-    SS3_x_offset_queue.put(ss3.ang_x_raw + ss_eshim_x[2])   #add electronic shims to angle offset for tracking
-    SS3_y_offset_queue.put(ss3.ang_y_raw + ss_eshim_y[2])
-    SS3_time_offset_queue.put(ss3_tstamp)
+        ang_x[i-1] = ss[i-1].ang_x_filt + ss_eshim_x[i-1]    #add electronic shims to angle offset for tracking
+        ang_y[i-1] = ss[i-1].ang_y_filt + ss_eshim_y[i-1]
+    else:
+        ang_x[i-1] = ss[i-1].ang_x_raw + ss_eshim_x[i-1]
+        ang_y[i-1] = ss[i-1].ang_y_raw + ss_eshim_y[i-1]

@@ -60,28 +60,28 @@ class IMU:
         self.ypr = self.imu.current_data.yaw_pitch_roll
         return self.ypr
                   
-if __name__ == '__main__':
-    
-    #Create a ptu object, define com_port and baudrate
-    imu = IMU(com_port='COM5',baudrate=115200) #921600
-    
-    imu.grab_accel()
-    print('Accel-x =',imu.accel.x)
-    print('Accel-y =',imu.accel.y)
-    print('Accel-z =',imu.accel.z)
-    
-    imu.grab_ang_r()
-    print('Angular Rate x-axis =',imu.ang_r.x)
-    print('Angular Rate y-axis =',imu.ang_r.y)
-    print('Angular Rate z-axis =',imu.ang_r.z)
-    
-    imu.grab_mag()
-    print('Magnetic Field Vector x =',imu.mag.x)
-    print('Magnetic Field Vector y =',imu.mag.y)
-    print('Magnetic Field Vector z =',imu.mag.z)
-    
-    
-    #Disconnect from imu
-    imu.imu.disconnect()
-    
+#if __name__ == '__main__':
+#    
+#    #Create a ptu object, define com_port and baudrate
+#    imu = IMU(com_port='COM7',baudrate=115200) #921600
+#    
+#    imu.grab_accel()
+#    print('Accel-x =',imu.accel.x)
+#    print('Accel-y =',imu.accel.y)
+#    print('Accel-z =',imu.accel.z)
+#    
+#    imu.grab_ang_r()
+#    print('Angular Rate x-axis =',imu.ang_r.x)
+#    print('Angular Rate y-axis =',imu.ang_r.y)
+#    print('Angular Rate z-axis =',imu.ang_r.z)
+#    
+#    imu.grab_mag()
+#    print('Magnetic Field Vector x =',imu.mag.x)
+#    print('Magnetic Field Vector y =',imu.mag.y)
+#    print('Magnetic Field Vector z =',imu.mag.z)
+#    
+#    
+#    #Disconnect from imu
+#    imu.imu.disconnect()
+#    
     
