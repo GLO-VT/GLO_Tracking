@@ -69,6 +69,27 @@ class SS:
            self.ang_x_filt = np.nan
            self.ang_y_filt = np.nan
            
+    def read_data_raw(self):
+        try:
+            self.data = self.ss.read_registers(12,2)    #read SS data registers 8-14
+             #ang_x_raw
+            if self.data[0] > 50000:
+                self.ang_x_raw = -float(65536 - self.data[0])/1000.0
+            else:    
+                self.ang_x_raw = float(self.data[0])/1000.0
+            #ang_y_raw
+            if self.data[1] > 50000:
+                self.ang_y_raw = -float(65536 - self.data[1])/1000.0
+            else:    
+                self.ang_y_raw = float(self.data[1])/1000.0 
+            self.data_exists=True
+        except:
+           print('Failed to read data from sun sensor',self.inst_id) 
+           self.data_exists=False
+           self.ang_x_raw = np.nan
+           self.ang_y_raw = np.nan
+
+           
        
             
 #if __name__ == '__main__':
