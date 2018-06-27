@@ -30,25 +30,25 @@ DataFetch = multiprocessing.Process(name='DataFetch',target=ss_read,args=(params
 
 
 
-def sunsensor_read(params.delay,
-            params.track_time,
-            params.filter_mode,
-            params.ss_read,
-            params.SS1_id,
-            params.SS1_com,
-            params.SS1_baudrate,
-            params.SS2_id,
-            params.SS2_com,
-            params.SS2_baudrate,
-            params.SS3_id,
-            params.SS3_com,
-            params.SS3_baudrate):
+def sunsensor_read(delay,
+            track_time,
+            filter_mode,
+            ss_read,
+            SS1_id,
+            SS1_com,
+            SS1_baudrate,
+            SS2_id,
+            SS2_com,
+            SS2_baudrate,
+            SS3_id,
+            SS3_com,
+            SS3_baudrate):
     
     ss_read=[1,2,3]
 
-    ss1=SS(inst_id=params.SS1_id,com_port=params.SS1_com,baudrate=params.SS1_baudrate)
-    ss2=SS(inst_id=params.SS2_id,com_port=params.SS2_com,baudrate=params.SS2_baudrate)
-    ss3=SS(inst_id=params.SS3_id,com_port=params.SS3_com,baudrate=params.SS3_baudrate)
+    ss1=SS(inst_id=SS1_id,com_port=SS1_com,baudrate=SS1_baudrate)
+    ss2=SS(inst_id=SS2_id,com_port=SS2_com,baudrate=SS2_baudrate)
+    ss3=SS(inst_id=SS3_id,com_port=SS3_com,baudrate=SS3_baudrate)
     
     time_start = time.time()
     while True:
@@ -95,10 +95,10 @@ def sunsensor_read(params.delay,
             SS3_time_offset_queue.put(ss3_tstamp)
         #Ensure you are at the rate    
         time_diff = time.time() - time_ss1_0
-        if params.delay - time_diff > 0:
-            time.sleep(params.delay-time_diff)
+        if delay - time_diff > 0:
+            time.sleep(delay-time_diff)
         # Exit the function once tracking time has been reached
-        if((time.time()-time_start) > params.track_time):
+        if((time.time()-time_start) > track_time):
             #Note: try catch to stop PTU is not commented here, ensure if it would be able to be called
             #ptu.cmd('ps0')
             #ptu.cmd('ts0')
