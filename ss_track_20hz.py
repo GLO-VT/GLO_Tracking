@@ -22,6 +22,7 @@ import sys
 import cv2
 import ephem
 import os
+import glob 
 
 
 class SS_tracking:
@@ -314,12 +315,21 @@ class SS_tracking:
         dir_date = time.strftime("%Y%m%d")+'/'
         if not os.path.exists(self.save_dir+dir_date):
             os.makedirs(self.save_dir+dir_date)  
-        
-        
+        #find all csv files in today's folder 
+        file_list = glob.glob(r'YOUR LOCAL DIR' + dir_date+ '*.csv')
+        run_number=0
+        #loop through list 
+        if(len(file_list)!=0): #only check list if is not empty, if empty leave run number as zero
+            for i in range(len(file_list)):
+                Run_csv = file_list[i].split('RUN')
+                run = Run_csv.split('.')
+                if run[0] > run_number: 
+                    run_number = run[0]+1 #make the run number one larger than the largest
+            
         #Save data to file   
         for i in range(len(self.ss_read)):
             print('saving ss',str(ss_read[i]),'tracking data to',self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'.csv')
-            self.data['ss'+str(ss_read[i])].to_csv(self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'.csv',index_label='time')
+            self.data['ss'+str(ss_read[i])].to_csv(self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'RUN'+run_number+'.csv',index_label='time')
                
     def run(self):
         '''
