@@ -23,6 +23,7 @@ import cv2
 import ephem
 import os
 import glob 
+import pandas as pd
 
 
 class SS_tracking:
@@ -1067,6 +1068,39 @@ if __name__ == '__main__':
     #Save data
     ss_tracking.save_data()
     
+   
+    #df = pd.read_csv("CSVPATH.csv", header=None, index_col=None)
+    #n_cols=len(df.columns)
+    #header=[]
+    #for i in range(n_cols):
+    #    header.append('')
+    ##insert desired values into header[] in format set out below 
+    #
+    #df.columns = header
+    #df.to_csv("CSVPATH.csv", index=False)
+    #
+    #df = pd.read_csv("CSVPATH.csv", header=None, index_col=None)
+    #n_cols=len(df.columns)
+    #header=[]
+    #for i in range(n_cols):
+    #    header.append('')
+    ##add whatever strings to header 
+    #header[0]='kpx'
+    #header[1]='kpy'
+    #header[2]='kix'
+    #header[3]='kiy'
+    #header[4]='kdx'
+    #header[5]='kdy'
+    #header[6]='hz'
+    #header[7]='run'
+    #header[8]='track_mode'
+    #header[9]='filter_mode'
+    #header[10]='track_time'
+    #header[11]='eshim_x'
+    #header[12]='eshim_y'
+    #df.columns = header
+    #df.to_csv("CSVPATH.csv", index=False)
+        
     #Grab data in dataframe
     df = ss_tracking.data
         
