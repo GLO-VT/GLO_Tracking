@@ -639,7 +639,7 @@ if __name__ == '__main__':
     
 ###### Operational parameters ###########
     parser.add_argument('-tm','--track_mode',
-                        default=3,
+                        default=1,
                         type=int,
                         help='Tracking mode')
     
@@ -664,7 +664,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=1,
+                        default=10,
                         type=float,
                         help='Total time to track (seconds)')
     
