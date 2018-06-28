@@ -29,8 +29,10 @@ class SS_tracking:
     PID tracking of the sun using a FLIR Pan Tilt Unit and feedback from sun sensors
     
     Inputs:
-        ss: list of sun sensor serial connection objects 
         ptu: pan-tilt unit serial connection object
+        SS1_queue: multiprocessing.Queue that has SS1 data stored on it
+        SS2_queue: multiprocessing.Queue that has SS2 data stored on it
+        SS3_queue: multiprocessing.Queue that has SS3 data stored on it
         ss_read: list of sun sensors to capture data from (ie ss_read=[1,2] will only read 
                  2 sun sensors with instrument ids of 1 and 2)
         ss_track: list of sun sensors to use for tracking (ie ss_track=[1,2] will only track 
@@ -312,6 +314,7 @@ class SS_tracking:
         dir_date = time.strftime("%Y%m%d")+'/'
         if not os.path.exists(self.save_dir+dir_date):
             os.makedirs(self.save_dir+dir_date)  
+        
         
         #Save data to file   
         for i in range(len(self.ss_read)):
