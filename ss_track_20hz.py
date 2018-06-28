@@ -329,8 +329,53 @@ class SS_tracking:
         #Save data to file   
         for i in range(len(self.ss_read)):
             print('saving ss',str(ss_read[i]),'tracking data to',self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'.csv')
-            self.data['ss'+str(ss_read[i])].to_csv(self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'_RUN'+str(run_number)+'.csv',index_label='time')
+            f_name=self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'_RUN'+str(run_number)+'.csv'
+            self.data['ss'+str(ss_read[i])].to_csv(f_name,index_label='time')
                
+            df = pd.read_csv(f_name, header=None, index_col=None)
+            n_cols=len(df.columns)
+            header=[]
+            for j in range(n_cols):
+                header.append('')
+            #insert desired values into header[] in format set out below 
+            header[0]=self.pid_x.Kp
+            header[1]=self.pid_y.Kp
+            header[2]=self.pid_x.Ki
+            header[3]=self.pid_y.Ki
+            header[4]=self.pid_x.Kd
+            header[5]=self.pid_y.Kd
+            header[6]=self.hz
+            header[7]=run_number
+            header[8]=self.track_mode
+            header[9]=self.filter_mode
+            header[10]=self.track_time
+            header[11]=self.ss_eshim_x
+            header[12]=self.ss_eshim_y
+            df.columns = header
+            df.to_csv(f_name, index=False)
+            
+            df = pd.read_csv(f_name, header=None, index_col=None)
+            n_cols=len(df.columns)
+            header=[]
+            for j in range(n_cols):
+                header.append('')
+            #add whatever strings to header 
+            header[0]='kpx'
+            header[1]='kpy'
+            header[2]='kix'
+            header[3]='kiy'
+            header[4]='kdx'
+            header[5]='kdy'
+            header[6]='hz'
+            header[7]='run'
+            header[8]='track_mode'
+            header[9]='filter_mode'
+            header[10]='track_time'
+            header[11]='eshim_x'
+            header[12]='eshim_y'
+            df.columns = header
+            df.to_csv(f_name, index=False)
+    
     def run(self):
         '''
         Start tracking loop
@@ -1067,39 +1112,6 @@ if __name__ == '__main__':
     
     #Save data
     ss_tracking.save_data()
-    
-   
-    #df = pd.read_csv("CSVPATH.csv", header=None, index_col=None)
-    #n_cols=len(df.columns)
-    #header=[]
-    #for i in range(n_cols):
-    #    header.append('')
-    ##insert desired values into header[] in format set out below 
-    #
-    #df.columns = header
-    #df.to_csv("CSVPATH.csv", index=False)
-    #
-    #df = pd.read_csv("CSVPATH.csv", header=None, index_col=None)
-    #n_cols=len(df.columns)
-    #header=[]
-    #for i in range(n_cols):
-    #    header.append('')
-    ##add whatever strings to header 
-    #header[0]='kpx'
-    #header[1]='kpy'
-    #header[2]='kix'
-    #header[3]='kiy'
-    #header[4]='kdx'
-    #header[5]='kdy'
-    #header[6]='hz'
-    #header[7]='run'
-    #header[8]='track_mode'
-    #header[9]='filter_mode'
-    #header[10]='track_time'
-    #header[11]='eshim_x'
-    #header[12]='eshim_y'
-    #df.columns = header
-    #df.to_csv("CSVPATH.csv", index=False)
         
     #Grab data in dataframe
     df = ss_tracking.data
