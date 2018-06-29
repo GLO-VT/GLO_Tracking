@@ -130,6 +130,12 @@ class SS_tracking:
                                                            'imu_ang_x',
                                                            'imu_ang_y',
                                                            'imu_ang_z',
+                                                           'imu_mag_x',
+                                                           'imu_mag_y',
+                                                           'imu_mag_z',
+                                                           'imu_ypr_x',
+                                                           'imu_ypr_y',
+                                                           'imu_ypr_z',                                                           
                                                            'elapsed'])
                     
         #Initialize PTU speed to 0
@@ -491,6 +497,8 @@ class SS_tracking:
                 #try:
                 self.imu.grab_accel()  #read IMU accelerometer data
                 self.imu.grab_ang_r()   #read IMU angular rate data
+                self.imu.grab_mag()
+                self.imu.grab_ypr()
                 #Store all data in a list before saving to pandas dataframe
                 data_add = [self.ang_x_track,
                             self.ang_y_track,
@@ -504,6 +512,12 @@ class SS_tracking:
                             self.imu.ang_r.x,
                             self.imu.ang_r.y,
                             self.imu.ang_r.z,
+                            self.imu.mag.x,
+                            self.imu.mag.y,
+                            self.imu.mag.z,
+                            self.imu.ypr.x,
+                            self.imu.ypr.y,
+                            self.imu.ypr.z,                            
                             self.elapsed,
                             ]
                 self.data['ss'+str(i)].loc[self.d_time] = data_add
