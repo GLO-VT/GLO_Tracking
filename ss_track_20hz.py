@@ -438,12 +438,18 @@ class SS_tracking:
                 else:
                     ss3_data=[np.nan,np.nan,np.nan]
             
-            ang_x[0]=ss1_data[0]
-            ang_x[1]=ss2_data[0]
-            ang_x[2]=ss3_data[0]
+            if ss1_data[0] != 0.0:
+                ang_x[0]=ss1_data[0]
+            else:
+                ss1_data[0]=np.nan
+            if ss2_data[0] !=0.0:
+                ang_x[1]=ss2_data[0]
+            else:
+                ss2_data[1]=np.nan
+            ang_x[2]=np.nan
             ang_y[0]=ss1_data[1]
             ang_y[1]=ss2_data[1]
-            ang_y[2]=ss3_data[1]
+            ang_y[2]=np.nan
 #            for i in ss_read:    #Loop through all sun sensors
 #                #self.ss[i-1].read_data_raw()    #Read all data from sun sensor using SS class      
 #                if i in self.ss_track:   #Only include x and y SS offsets if included in ss_track
@@ -602,21 +608,21 @@ def sunsensor_read( delay,
             
         #SS3
         time_ss3_0=time.time()
-        ss3.read_data_all() #Read all data from sun sensor using SS class      
-        time_ss3_1=time.time()
-        ss3_tstamp=time.time() - (time_ss3_1-time_ss3_0)/2.
-        if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
-            if(SS3_queue.full()==False):
-                SS3_queue.put([ss3.ang_x_filt + ss_eshim_x[2],ss3.ang_y_filt + ss_eshim_y[2],ss3_tstamp])   #add electronic shims to angle offset for tracking  
-            else:
-                SS3_queue.get()
-                SS3_queue.put([ss3.ang_x_filt + ss_eshim_x[2],ss3.ang_y_filt + ss_eshim_y[2],ss3_tstamp])
-        else:
-            if(SS3_queue.full()==False):
-                SS3_queue.put([ss3.ang_x_raw + ss_eshim_x[2],ss3.ang_y_raw + ss_eshim_y[2],ss3_tstamp])
-            else:
-                SS3_queue.get()
-                SS3_queue.put([ss3.ang_x_filt + ss_eshim_x[2],ss3.ang_y_filt + ss_eshim_y[2],ss3_tstamp])
+#        ss3.read_data_all() #Read all data from sun sensor using SS class      
+#        time_ss3_1=time.time()
+#        ss3_tstamp=time.time() - (time_ss3_1-time_ss3_0)/2.
+#        if filter_mode == 2:   #Use filtered data if filter mode=2, otherwise use raw data
+#            if(SS3_queue.full()==False):
+#                SS3_queue.put([ss3.ang_x_filt + ss_eshim_x[2],ss3.ang_y_filt + ss_eshim_y[2],ss3_tstamp])   #add electronic shims to angle offset for tracking  
+#            else:
+#                SS3_queue.get()
+#                SS3_queue.put([ss3.ang_x_filt + ss_eshim_x[2],ss3.ang_y_filt + ss_eshim_y[2],ss3_tstamp])
+#        else:
+#            if(SS3_queue.full()==False):
+#                SS3_queue.put([ss3.ang_x_raw + ss_eshim_x[2],ss3.ang_y_raw + ss_eshim_y[2],ss3_tstamp])
+#            else:
+#                SS3_queue.get()
+#                SS3_queue.put([ss3.ang_x_filt + ss_eshim_x[2],ss3.ang_y_filt + ss_eshim_y[2],ss3_tstamp])
         #Ensure you are at the rate    
         time_diff = time.time() - time_ss1_0
         if delay - time_diff > 0:
@@ -664,7 +670,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=10,
+                        default=120,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -680,32 +686,32 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=0.3,
+                        default=0.2,
                         type=float,
                         help='Proportional gain x-axis')
     
     parser.add_argument('-kpy','--kpy',
-                        default=-0.44*0,
+                        default=0.1,
                         type=float,
                         help='Proportional gain y-axis')
     
     parser.add_argument('-kdx','--kdx',
-                        default=0.3,
+                        default=0.2,
                         type=float,
                         help='Derivative gain x-axis')
     
     parser.add_argument('-kdy','--kdy',
-                        default=-0.3*0,
+                        default=0.1,
                         type=float,
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=0.0,
+                        default=0.1,
                         type=float,
                         help='Integral gain x-axis')
     
     parser.add_argument('-kiy','--kiy',
-                        default=0.0,
+                        default=0.1,
                         type=float,
                         help='Integral gain y-axis')
 
@@ -864,7 +870,7 @@ if __name__ == '__main__':
     params=parser.parse_args()
     
     #Define Default Modes  
-    default_track_mode = 4
+    default_track_mode = 1
     default_filter_mode = 1
     default_ptu_offset_mode = 0
 
@@ -1049,7 +1055,7 @@ if __name__ == '__main__':
     ss3_com_port =params.ss3_com_port
     ss3_baud_rate=params.ss3_baud_rate 
 
-    SSDataFetch = Process(name='SSDataFetch',target=sunsensor_read,args=(delay,
+    SSDataFetch = Process(name='SSDataFetch',target=sunsensor_read,args=(delay*2,
                                                                   track_time,
                                                                   filter_mode,
                                                                   ss_read,
