@@ -399,6 +399,11 @@ if __name__ == '__main__':
                         default=cwd+'/testing/',
                         type=str,
                         help='Directory to save data to')
+    
+    parser.add_argument('-h','--help',
+                        default=False,
+                        type=bool,
+                        help='Display help')
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
@@ -583,7 +588,23 @@ if __name__ == '__main__':
                         help='PTU UTC offset')
 
     
-    params=parser.parse_args()    
+    params=parser.parse_args() 
+    
+    if params.help:
+        print('Tracking Mode (use -tm= ):\n'+
+               '1: PID Position Control\n'+
+               '2: PID Absolute Velocity Control\n'+
+               '3: PID Velocity Derivative Control\n'+
+               '4: No tracking - Read Sun Sensor Data Only\n'+
+               '5: Ephemeris Tracking: Stationary platform\n'+
+               '6: Ephemeris Tracking: Moving platform (need GPS sensor)')
+        
+        print('Sun Sensor/IMU Filtering Mode (use -fm= ):\n'+
+                '1: Raw data: Use mean of raw data from all tracking sun sensors\n'+
+                '2: Filtered data: Use mean of filtered data from all tracking sun sensors\n'+
+                '3: Kalman Filter: probably not implemented yet...\n')
+        sys.exit()
+        
     #Define Default Modes  
     default_track_mode = 4      #no tracking
     default_filter_mode = 1     #raw SS and IMU data
@@ -670,39 +691,10 @@ if __name__ == '__main__':
     ptu.ephem_point(ep,imu=imu,target='sun',init=False,ptu_cmd=False)
     ptu.ephem_point(ep,imu=imu,target='moon',init=False,ptu_cmd=False)
     
-    if manual_config == True:
-        ptu_micro = int(input('Set PTU to microstep mode?:\n'+
-                               '0: No\n'+
-                               '1: Yes\n'+
-                               '>>> '))
-        #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
-        if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24) | (params.ptu_set_micro == True):
-            ptu.set_microstep()
-            input('Press any key when PTU has completed calibration')
-            
-        track_mode = int(input('Select PTU Tracking Mode:\n'+
-                               '1: PID Position Control\n'+
-                               '2: PID Absolute Velocity Control\n'+
-                               '3: PID Velocity Derivative Control\n'+
-                               '4: No tracking - Read Sun Sensor Data Only\n'+
-                               '5: Ephemeris Tracking: Stationary platform\n'+
-                               '6: Ephemeris Tracking: Moving platform (need GPS sensor)\n'+
-                               '>>> '))
-        
-        if track_mode !=4:
-            filter_mode = int(input('Select Sun Sensor Filtering Mode:\n'+
-                                    '1: Raw data: Use mean of raw data from all tracking sun sensors\n'+
-                                    '2: Filtered data: Use mean of filtered data from all tracking sun sensors\n'+
-                                    '3: Kalman Filter: probably not implemented yet...\n'+
-                                    '>>> '))
-        else:
-            filter_mode = default_filter_mode
-        
-        ptu_offset_mode = int(input('Select PTU offset mode:\n'+
-                       '0: No Pointing Offset\n'+
-                       '1: Point PTU at Sun\n'+
-                       '2: Point PTU at Moon\n'+
-                       '>>> '))  
+    #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
+    if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24) | (params.ptu_set_micro == True):
+        ptu.set_microstep()
+        input('Press any key when PTU has completed calibration')
         
         if ptu_offset_mode == 1:
             #Command PTU to point at sun
@@ -715,6 +707,10 @@ if __name__ == '__main__':
         track_mode = default_track_mode
         filter_mode = default_filter_mode
         ptu_offset_mode = default_ptu_offset_mode
+                #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
+        if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24) | (params.ptu_set_micro == True):
+            ptu.set_microstep()
+            input('Press any key when PTU has completed calibration')
     
     
     #Initiate PID control loop
@@ -808,3 +804,36 @@ if __name__ == '__main__':
             plt.legend()
     except:
         print('Failed to plot data')
+
+
+       
+#    if manual_config == True:
+#        ptu_micro = int(input('Set PTU to microstep mode?:\n'+
+#                               '0: No\n'+
+#                               '1: Yes\n'+
+#                               '>>> '))
+#
+#            
+#        track_mode = int(input('Select PTU Tracking Mode:\n'+
+#                               '1: PID Position Control\n'+
+#                               '2: PID Absolute Velocity Control\n'+
+#                               '3: PID Velocity Derivative Control\n'+
+#                               '4: No tracking - Read Sun Sensor Data Only\n'+
+#                               '5: Ephemeris Tracking: Stationary platform\n'+
+#                               '6: Ephemeris Tracking: Moving platform (need GPS sensor)\n'+
+#                               '>>> '))
+#        
+#        if track_mode !=4:
+#            filter_mode = int(input('Select Sun Sensor Filtering Mode:\n'+
+#                                    '1: Raw data: Use mean of raw data from all tracking sun sensors\n'+
+#                                    '2: Filtered data: Use mean of filtered data from all tracking sun sensors\n'+
+#                                    '3: Kalman Filter: probably not implemented yet...\n'+
+#                                    '>>> '))
+#        else:
+#            filter_mode = default_filter_mode
+#        
+#        ptu_offset_mode = int(input('Select PTU offset mode:\n'+
+#                       '0: No Pointing Offset\n'+
+#                       '1: Point PTU at Sun\n'+
+#                       '2: Point PTU at Moon\n'+
+#                       '>>> '))  
