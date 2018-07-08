@@ -63,6 +63,7 @@ class SS_tracking:
     def __init__(self,
                  ss,
                  ptu,
+                 imu,
                  ss_read=[1,2,3],
                  ss_track=[1,2,3],
                  ss_eshim_x=[0.0,0.0,0.0],
@@ -78,12 +79,14 @@ class SS_tracking:
                  save_dir = 'C:/git_repos/GLO/Tutorials/tracking/',
                  show_display=True,
                  track_x=True,
-                 track_y=True
+                 track_y=True,
+                 screen_res=(1280,800)
                  ):
         
         #Initialize parameters
         self.ss = ss
         self.ptu = ptu
+        self.imu=imu
         self.ss_read = ss_read
         self.ss_track = ss_track
         self.ss_eshim_x = ss_eshim_x
@@ -103,6 +106,7 @@ class SS_tracking:
         self.track_y = track_y
         self.max_vel_x = 1.0
         self.max_vel_y = 1.0
+        self.screen_res = screen_res
     
         #Initialized dataframe to store data  
         self.data = pd.DataFrame(columns=['ang_x_track',
@@ -259,7 +263,7 @@ class SS_tracking:
             
         #Save data to file   
         f_name=self.save_dir+dir_date+'ss_track_'+file_time+'_RUN'+str(run_number)+'.csv'
-        print('saving tracking data to',save_loc)
+        print('saving tracking data to',f_name)
         self.data.to_csv(f_name,index_label='time')
            
         df = pd.read_csv(f_name, header=None, index_col=None)
@@ -360,34 +364,45 @@ class SS_tracking:
                 #only start filtering after enough samples (size of filter window) have been recorded
                 if self.cnt > self.filter_win:
                     #Create array of past data with number of elements=filter window size (self.filter_win)     
-                    ss_raw_x = np.array(self.data[ss_read[0]]['ss_track_x'][-(self.filter_win-1):].tolist() + self.ang_x_track)
-                    ss_raw_y = np.array(self.data[ss_read[0]]['ss_track_y'][-(self.filter_win-1):].tolist() + self.ang_y_track)
+                    ss_raw_x = np.array(self.data['ang_x_track'][-(self.filter_win-1):].tolist() + self.ang_x_track)
+                    ss_raw_y = np.array(self.data['ang_x_track'][-(self.filter_win-1):].tolist() + self.ang_y_track)
                     
                     #Collect IMU angular rates (current data stored within IMU class)
-                    imu.grab_ang_r()
-                    imu_raw_x = np.array(self.data[ss_read[0]]['imu_ang_z'][-(self.filter_win-1):].tolist() + imu.ang_r.z)
-                    imu_raw_y = np.array(self.data[ss_read[0]]['imu_ang_y'][-(self.filter_win-1):].tolist() + imu.ang_r.y)
-                
+                    self.imu_ang_r = imu.grab_ang_r()
+                    imu_raw_x = np.array(self.data['imu_ang_z'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.z])
+                    imu_raw_y = np.array(self.data['imu_ang_y'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.y])
+                    
+                    if self.filter_mode == 1:
+                        self.imu_filt_x = self.ang_x_track
+                        self.imu_filt_y = self.ang_y_track
+                    
                     if self.filter_mode == 2:  #Rolling mean (just take mean of samples in filter window)
                         self.ss_filt_x = np.nanmean(ss_raw_x)
                         self.ss_filt_y = np.nanmean(ss_raw_y)
                         self.imu_filt_x = np.nanmean(imu_raw_x)
-                        slef.imu_filt_y = np.nanmean(imu_raw_y)
+                        self.imu_filt_y = np.nanmean(imu_raw_y) 
+                        self.ang_x_track = self.ss_filt_x
+                        self.ang_y_track = self.ss_filt_x
                         
                     if self.filter_mode == 3:  #Apply Butterworth filter to samples in filter window
-                        self.ss_filt_x = butter(ss_raw_x)
-                        self.ss_filt_y = butter(ss_raw_y)
-                        self.imu_filt_x = butter(imu_raw_x)
-                        self.imu_filt_y = butter(imu_raw_y)
-                    
-                    self.ang_x_track = self.ss_filt_x[-1]
-                    self.ang_y_track = self.ss_filt_x[-1]
+                        self.ss_filt_x = self.butter(ss_raw_x)
+                        self.ss_filt_y = self.butter(ss_raw_y)
+                        self.imu_filt_x = self.butter(imu_raw_x)
+                        self.imu_filt_y = self.butter(imu_raw_y)
+                        self.ang_x_track = self.ss_filt_x[-1]
+                        self.ang_y_track = self.ss_filt_x[-1]
+                else:
+                    #Set imu filter values to nan if not using filtered data
+                    self.imu_ang_r = self.imu.grab_ang_r()
+                    self.imu_filt_x = self.imu_ang_r.x
+                    self.imu_filt_y = self.imu_ang_r.y
             else:
                 #Set imu filter values to nan if not using filtered data
-                self.imu_filt_x = np.nan
-                slef.imu_filt_y = np.nan
+                self.imu_ang_r = self.imu.grab_ang_r()
+                self.imu_filt_x = self.imu_ang_r.x
+                self.imu_filt_y = self.imu_ang_r.y
       
-            if self.tracking_mode == 1:   #PTU position-command mode: Simple PID control of ss offset
+            if self.track_mode == 1:   #PTU position-command mode: Simple PID control of ss offset
                 try:
                     self.pid_pos(self.ang_x_track,self.ang_y_track)  #Generate PID offset control outputs
                     self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
@@ -401,21 +416,24 @@ class SS_tracking:
                     self.ptu_cmd_x = np.nan
                     self.ptu_cmd_y = np.nan 
             
-            if self.tracking_mode == 2:   #PTU velocity-command mode: -imu velocity + PID control of ss position
-                try:
-                    self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
-                    self.ptu_cmd_x = -self.imu_filt_x[-1] + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
-                    self.ptu_cmd_y = -self.imu_filt_y[-1] + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
-                    if self.track_x:
-                        self.ptu.cmd('ps'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
-                        time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
-                    if self.track_y:
-                        self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
-                except:
-                    self.ptu_cmd_x = np.nan
-                    self.ptu_cmd_y = np.nan 
+            if self.track_mode == 2:   #PTU velocity-command mode: -imu velocity + PID control of ss position
+#                try:
+                self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
+                self.ptu_cmd_x = -self.imu_filt_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
+                self.ptu_cmd_y = -self.imu_filt_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
+                if self.track_x:
+                    self.ptu.cmd('ps'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
+                    print('ps'+str(self.ptu_cmd_x)+' ')
+                    time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
+                if self.track_y:
+                    self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
+                    print('ts'+str(self.ptu_cmd_y)+' ')
+#                except:
+#                    self.ptu_cmd_x = np.nan
+#                    self.ptu_cmd_y = np.nan 
+#                    print('ptu command failed tracking mode 2')
                     
-            if self.tracking_mode == 3:   #PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position
+            if self.track_mode == 3:   #PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position
                 try:
                     self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
                     try:
@@ -435,19 +453,24 @@ class SS_tracking:
                         self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
                 except:
                     self.ptu_cmd_x = np.nan
-                    self.ptu_cmd_y = np.nan 
-              
-            if self.tracking_mode == 2:   #PTU velocity-command mode: 
+                    self.ptu_cmd_y = np.nan
                            
             #Record time elapsed from start of tracking loop
             self.elapsed = time.time() - self.t_start
-            self.dt = self.elapsed - self.data['elapsed'][self.cnt-1]
+            self.d_time = datetime.now()
+            if self.cnt > 1:
+                self.dt = self.elapsed - self.data['elapsed'][self.cnt-1]
             
             #Update display
             if self.show_display == True:
                 self.update_display()
- 
-    
+            if self.cnt <= self.filter_win:
+                self.imu_ang_r = self.imu.grab_ang_r()
+                self.imu_filt_x = np.nan
+                self.imu_filt_y = np.nan
+            self.imu_accel=self.imu.grab_accel()
+            self.imu_ypr=self.imu.grab_ypr()
+            self.imu_mag=self.imu.grab_mag()
             data_add = [self.ang_x_track,
                         self.ang_y_track,
                         ang_x[0],
@@ -458,23 +481,23 @@ class SS_tracking:
                         ang_y[2],
                         self.ptu_cmd_x,
                         self.ptu_cmd_y,
-                        self.imu.accel.x,
-                        self.imu.accel.y,
-                        self.imu.accel.z,
-                        self.imu.ang_r.x,
-                        self.imu.ang_r.y,
-                        self.imu.ang_r.z,
-                        self.imu.mag.x,
-                        self.imu.mag.y,
-                        self.imu.mag.z,
-                        self.imu.ypr.x,
-                        self.imu.ypr.y,
-                        self.imu.ypr.z, 
+                        self.imu_accel.x,
+                        self.imu_accel.y,
+                        self.imu_accel.z,
+                        self.imu_ang_r.x,
+                        self.imu_ang_r.y,
+                        self.imu_ang_r.z,
+                        self.imu_mag.x,
+                        self.imu_mag.y,
+                        self.imu_mag.z,
+                        self.imu_ypr.x,
+                        self.imu_ypr.y,
+                        self.imu_ypr.z, 
                         self.imu_filt_x,
                         self.imu_filt_y,
                         self.elapsed,
                         ]
-                self.data.loc[self.d_time] = data_add
+            self.data.loc[self.d_time] = data_add
             
             self.cnt+=1
             
@@ -509,12 +532,12 @@ if __name__ == '__main__':
                         help='Tracking in x-axis')
 
     parser.add_argument('-ty','--track_y',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Tracking in y-axis')
     
     parser.add_argument('-tm','--track_mode',
-                        default=1,
+                        default=2,
                         type=int,
                         help='Tracking mode')
     
@@ -539,12 +562,12 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=10,
+                        default=60,
                         type=float,
                         help='Total time to track (seconds)')
     
     parser.add_argument('-hz','--hz',
-                        default=20,
+                        default=5,
                         type=float,
                         help='Tracking frequency (hz)')
     
@@ -553,14 +576,14 @@ if __name__ == '__main__':
                         type=str,
                         help='Directory to save data to')
     
-    parser.add_argument('-h','--help',
-                        default=False,
-                        type=bool,
-                        help='Display help')
+#    parser.add_argument('-h','--help',
+#                        default=False,
+#                        type=bool,
+#                        help='Display help')
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=0.3,
+                        default=10.0,
                         type=float,
                         help='Proportional gain x-axis')
     
@@ -570,7 +593,7 @@ if __name__ == '__main__':
                         help='Proportional gain y-axis')
     
     parser.add_argument('-kdx','--kdx',
-                        default=0.3,
+                        default=0.0,
                         type=float,
                         help='Derivative gain x-axis')
     
@@ -580,7 +603,7 @@ if __name__ == '__main__':
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=0.0,
+                        default=2.0,
                         type=float,
                         help='Integral gain x-axis')
     
@@ -598,12 +621,12 @@ if __name__ == '__main__':
                         help='Track with SS1 (True/False)')
     
     parser.add_argument('-ss2','--ss2_track',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Track with SS2 (True/False)')
     
     parser.add_argument('-ss3','--ss3_track',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Track with SS3 (True/False)')
     
@@ -743,23 +766,23 @@ if __name__ == '__main__':
     
     params=parser.parse_args() 
     
-    if params.help:
-        print('Tracking Mode (use -tm= ):\n'+
-               '1: PTU position-command mode: Simple PID control of ss offset\n'+
-               '2: PTU velocity-command mode: -imu velocity + PID control of ss position\n'+
-               '3: PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position\n'+
-               '4: No tracking - Read Sun Sensor Data Only\n'+
-               '5: Ephemeris Tracking: Stationary platform\n'+
-               '6: Ephemeris Tracking: Moving platform (need GPS sensor)')
-        
-        print('Sun Sensor/IMU Filtering Mode (use -fm= ):\n'+
-                '1: Raw data: Use mean of raw data from all tracking sun sensors\n'+
-                '2: Rolling Mean: Apply rolling mean to last n samples (n=filter window size)\n'+
-                '3: Butterworth: Apply butterworth filter to last n samples (n=filter window size)\n')
-        
-        print('Filter window size (use -fw=)\n'+
-              'ie, -fw=4 will use a filter window size of 4')
-        sys.exit()
+#    if params.help:
+#        print('Tracking Mode (use -tm= ):\n'+
+#               '1: PTU position-command mode: Simple PID control of ss offset\n'+
+#               '2: PTU velocity-command mode: -imu velocity + PID control of ss position\n'+
+#               '3: PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position\n'+
+#               '4: No tracking - Read Sun Sensor Data Only\n'+
+#               '5: Ephemeris Tracking: Stationary platform\n'+
+#               '6: Ephemeris Tracking: Moving platform (need GPS sensor)')
+#        
+#        print('Sun Sensor/IMU Filtering Mode (use -fm= ):\n'+
+#                '1: Raw data: Use mean of raw data from all tracking sun sensors\n'+
+#                '2: Rolling Mean: Apply rolling mean to last n samples (n=filter window size)\n'+
+#                '3: Butterworth: Apply butterworth filter to last n samples (n=filter window size)\n')
+#        
+#        print('Filter window size (use -fw=)\n'+
+#              'ie, -fw=4 will use a filter window size of 4')
+#        sys.exit()
         
     #Define Modes  
     track_mode = params.track_mode  #default: 4 = no tracking
@@ -804,7 +827,7 @@ if __name__ == '__main__':
         SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate)]
     
     #List of sun sensors to read data from (reduce number of sensors to increase sampling rate)
-    ss_read = [1,2,3]
+    ss_read = [1]
     
     #List of sun sensors to use for tracking
     ss_track = []
@@ -812,7 +835,7 @@ if __name__ == '__main__':
         ss_track.append(1)
     if params.ss2_track:
         ss_track.append(2)
-    if params.ss1_track:
+    if params.ss3_track:
         ss_track.append(3)
     
 #    ss_eshim_x = [-1.763, -1.547, -1.578]          #Specify electronic shims (x-dir) for sun sensors
@@ -846,7 +869,7 @@ if __name__ == '__main__':
     ptu.ephem_point(ep,imu=imu,target='moon',init=False,ptu_cmd=False)
     
     #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
-    if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24) | (params.ptu_set_micro == True):
+    if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24):
         ptu.set_microstep()
         input('Press any key when PTU has completed calibration')
         
@@ -866,6 +889,7 @@ if __name__ == '__main__':
     #Initiate PTU tracking
     ss_tracking = SS_tracking(ss,
                              ptu,
+                             imu,
                              ss_read=ss_read,
                              ss_track=ss_track,
                              ss_eshim_x=ss_eshim_x,
@@ -875,13 +899,13 @@ if __name__ == '__main__':
                              ptu_cmd_delay=ptu_cmd_delay,
                              track_mode=track_mode,
                              filter_mode=filter_mode,
-                             filter_win=params.filter_win
+                             filter_win=params.filter_win,
                              hz=hz,
                              track_time=track_time,
                              save_dir=save_dir,
-                             show_display=show_display
-                             track_x=parser.track_x
-                             track_y=parser.track_y
+                             show_display=show_display,
+                             track_x=params.track_x,
+                             track_y=params.track_y
                              )
         
     print('Tracking with sun sensors',ss_track,'for',track_time,'seconds')
@@ -921,14 +945,14 @@ if __name__ == '__main__':
         y2=df['ss1_y_raw']
         
         plt.figure(1)
-        plt.plot(x,y1,'o-',label='ss'+ss_num+'_ang_x_raw')
+        plt.plot(x,y1,'o-',label='ss1ang_x_raw')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
         plt.title('X-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
         plt.legend()
         
         plt.figure(2)
-        plt.plot(x,y2,'o-',label='ss'+ss_num+'_ang_y_raw')
+        plt.plot(x,y2,'o-',label='ss1_ang_y_raw')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
         plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
