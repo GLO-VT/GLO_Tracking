@@ -675,7 +675,8 @@ if __name__ == '__main__':
                                '0: No\n'+
                                '1: Yes\n'+
                                '>>> '))
-        if ptu_micro == 1:
+        #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
+        if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24) | (params.ptu_set_micro == True):
             ptu.set_microstep()
             input('Press any key when PTU has completed calibration')
             
