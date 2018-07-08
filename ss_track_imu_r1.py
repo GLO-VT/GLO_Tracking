@@ -374,11 +374,6 @@ if __name__ == '__main__':
                         default=0,
                         type=int,
                         help='PTU offset mode')
-    
-    parser.add_argument('-m','--man_config',
-                        default=True,
-                        type=bool,
-                        help='Manual config mode')
 
     parser.add_argument('-d','--display',
                         default='False',
@@ -605,34 +600,32 @@ if __name__ == '__main__':
                 '3: Kalman Filter: probably not implemented yet...\n')
         sys.exit()
         
-    #Define Default Modes  
-    default_track_mode = 4      #no tracking
-    default_filter_mode = 1     #raw SS and IMU data
-    default_ptu_offset_mode = 0 #no PTU offset prior to tracking
-
+    #Define Modes  
+    track_mode = params.track_mode  #default: 4 = no tracking
+    filter_mode = params.filter_mode  #default: 1 raw SS and IMU data
+    ptu_offset_mode = params.ptu_offset_mode  #default: 0 no PTU offset prior to tracking
     
-    manual_config = params.man_config    #Set to True to manually configure settings
+    #Show tracking display
     show_display = params.display
+    print('show_display = ',show_display)
     
-    print(show_display)
+    #Initiate PID control loop
+    #pan-axis (x-axis) PID gains
+    pid_x= PID(step_size=params.ptu_step_size) #'eighth'    #pid_x will control azimuth ptu motor (assuming orientation of ss is correct)
+    pid_x.SetKp(params.kpx) #0.44
+    pid_x.SetKi(params.kix) #0.05*0
+    pid_x.SetKd(params.kdx) #0.3
     
-    #Define PID control gains
-    #pan-axis gains
-    kp_x=params.kpx #0.44
-    ki_x=params.kix #0.05*0
-    kd_x=params.kdx #0.3
+    #tilt-axis (y-axis) PID gains
+    pid_y= PID(step_size=params.ptu_step_size)     #pid_y will control azimuth ptu motor (assuming orientation of ss is correct)
+    pid_y.SetKp(params.kpy) #-0.44
+    pid_y.SetKi(params.kiy) #0.01*0
+    pid_y.SetKd(params.kdy)   #-0.3
     
-    #tilt-axis gains
-    kp_y=params.kpy #-0.44
-    ki_y=params.kiy #0.01*0
-    kd_y=params.kdy #-0.3
+    print('Pan axis (x-axis) PID gains kpx=',params.kpx,'kix=',params.kix,'kdx=',params.kdx)
+    print('Tilt axis (t-axis) PID gains kpy=',params.kpy,'kiy=',params.kiy,'kdy=',params.kdy)
     
-    print('kpid_x',kp_x,ki_x,kd_x)
-    print('kpid_y',kp_y,ki_y,kd_y)
-    
-    
-    
-    #Define data collection parameters
+    #Define tracking/data collection parameters
     track_time= params.track_time #20  #number of seconds to capture data/track
     hz=params.hz #15      #data sample rate   
     cnt=0
@@ -645,9 +638,9 @@ if __name__ == '__main__':
     ep = ephem.Observer()
 
     #Establish communication with sun sensor/s - store in a list
-    ss=[SS(inst_id=1,com_port='COM4',baudrate=115200),
-        SS(inst_id=2,com_port='COM4',baudrate=115200),
-        SS(inst_id=3,com_port='COM4',baudrate=115200)]
+    ss=[SS(inst_id=params.ss1_inst_id,com_port=params.ss1_com_port,baudrate=params.ss1_baud_rate),
+        SS(inst_id=params.ss2_inst_id,com_port=params.ss2_com_port,baudrate=params.ss2_baud_rate),
+        SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate)]
     
     #List of sun sensors to read data from (reduce number of sensors to increase sampling rate)
     ss_read = [1,2,3]
@@ -674,7 +667,7 @@ if __name__ == '__main__':
     print('eshims_y',ss_eshim_y)
     
     #Establish communication with IMU
-    imu=IMU(com_port='COM7',baudrate=115200)
+    imu=IMU(com_port=params.imu_com_port,baudrate=params.imu_baud_rate)
     
     #Establish communication with PTU
     ptu_cmd_delay=params.ptu_cmd_delay #0.010
@@ -696,33 +689,12 @@ if __name__ == '__main__':
         ptu.set_microstep()
         input('Press any key when PTU has completed calibration')
         
-        if ptu_offset_mode == 1:
-            #Command PTU to point at sun
-            ptu.ephem_point(ep,imu=imu,target='sun',init=False)
-        if ptu_offset_mode == 2:
-            #Command PTU to point at moon
-            ptu.ephem_point(ep,imu=imu,target='moon',init=False)
-        
-    else:
-        track_mode = default_track_mode
-        filter_mode = default_filter_mode
-        ptu_offset_mode = default_ptu_offset_mode
-                #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
-        if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24) | (params.ptu_set_micro == True):
-            ptu.set_microstep()
-            input('Press any key when PTU has completed calibration')
-    
-    
-    #Initiate PID control loop
-    pid_x= PID(step_size='eighth')     #pid_x will control azimuth ptu motor (assuming orientation of ss is correct)
-    pid_x.SetKp(kp_x)
-    pid_x.SetKi(ki_x)
-    pid_x.SetKd(kd_x)
-    
-    pid_y= PID(step_size='eighth')     #pid_y will control azimuth ptu motor (assuming orientation of ss is correct)
-    pid_y.SetKp(kp_y)
-    pid_y.SetKi(ki_y)
-    pid_y.SetKd(kd_y)   
+    if ptu_offset_mode == 1:
+        #Command PTU to point at sun
+        ptu.ephem_point(ep,imu=imu,target='sun',init=False)
+    if ptu_offset_mode == 2:
+        #Command PTU to point at moon
+        ptu.ephem_point(ep,imu=imu,target='moon',init=False)
 
     #Set ptu=None if not using tracking to ensure PTU is not moved after initial offset
     if track_mode == 4:
@@ -732,21 +704,21 @@ if __name__ == '__main__':
 
     #Initiate PTU tracking
     ss_tracking = SS_tracking(ss,
-                            ptu,
-                            ss_read=ss_read,
-                            ss_track=ss_track,
-                            ss_eshim_x=ss_eshim_x,
-                            ss_eshim_y=ss_eshim_y,
-                            pid_x=pid_x,
-                            pid_y=pid_y,
-                            ptu_cmd_delay=ptu_cmd_delay,
-                            track_mode=track_mode,
-                            filter_mode=filter_mode,
-                            hz=hz,
-                            track_time=track_time,
-                            save_dir=save_dir,
-                            show_display=show_display
-                            )
+                             ptu,
+                             ss_read=ss_read,
+                             ss_track=ss_track,
+                             ss_eshim_x=ss_eshim_x,
+                             ss_eshim_y=ss_eshim_y,
+                             pid_x=pid_x,
+                             pid_y=pid_y,
+                             ptu_cmd_delay=ptu_cmd_delay,
+                             track_mode=track_mode,
+                             filter_mode=filter_mode,
+                             hz=hz,
+                             track_time=track_time,
+                             save_dir=save_dir,
+                             show_display=show_display
+                             )
         
     print('Tracking with sun sensors',ss_track,'for',track_time,'seconds')
     
@@ -793,20 +765,20 @@ if __name__ == '__main__':
             plt.plot(x,y1,'o-',label='ss'+ss_num+'_ang_x_raw')
             plt.xlabel('Time Elapsed (seconds)')
             plt.ylabel('Degrees')
-            plt.title('X-Axis sensor data at '+str(hz)+'hz\n kp='+str(kp_x)+' ki='+str(ki_x)+' kd='+str(kd_x))
+            plt.title('X-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
             plt.legend()
             
             plt.figure(2)
-            plt.plot(x,y2,'o-',label='ss'+ss_num+'_ang_x_raw')
+            plt.plot(x,y2,'o-',label='ss'+ss_num+'_ang_y_raw')
             plt.xlabel('Time Elapsed (seconds)')
             plt.ylabel('Degrees')
-            plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(kp_x)+' ki='+str(ki_x)+' kd='+str(kd_x))
+            plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
             plt.legend()
     except:
         print('Failed to plot data')
 
 
-       
+## Add to help display  
 #    if manual_config == True:
 #        ptu_micro = int(input('Set PTU to microstep mode?:\n'+
 #                               '0: No\n'+
@@ -814,21 +786,6 @@ if __name__ == '__main__':
 #                               '>>> '))
 #
 #            
-#        track_mode = int(input('Select PTU Tracking Mode:\n'+
-#                               '1: PID Position Control\n'+
-#                               '2: PID Absolute Velocity Control\n'+
-#                               '3: PID Velocity Derivative Control\n'+
-#                               '4: No tracking - Read Sun Sensor Data Only\n'+
-#                               '5: Ephemeris Tracking: Stationary platform\n'+
-#                               '6: Ephemeris Tracking: Moving platform (need GPS sensor)\n'+
-#                               '>>> '))
-#        
-#        if track_mode !=4:
-#            filter_mode = int(input('Select Sun Sensor Filtering Mode:\n'+
-#                                    '1: Raw data: Use mean of raw data from all tracking sun sensors\n'+
-#                                    '2: Filtered data: Use mean of filtered data from all tracking sun sensors\n'+
-#                                    '3: Kalman Filter: probably not implemented yet...\n'+
-#                                    '>>> '))
 #        else:
 #            filter_mode = default_filter_mode
 #        
