@@ -32,6 +32,8 @@ def grab_data(data_loc,params_loc):
                     data[ss][key]=pd.read_csv(file_locs[i],index_col='time')
                     try:
                         #Convert imu z-axis angular rate from rad/sec to deg/sec
+                        data[ss][key]['imu_ang_x']=data[ss][key]['imu_ang_x']*180.0/np.pi
+                        data[ss][key]['imu_ang_y']=data[ss][key]['imu_ang_y']*180.0/np.pi
                         data[ss][key]['imu_ang_z']=data[ss][key]['imu_ang_z']*180.0/np.pi
                         #Smooth out angular rate and take gradient to calculate yaw accelerations in deg/sec^2
                         data[ss][key]['accel']=np.gradient(data[ss][key]['imu_ang_z'].rolling(30,center=True).mean(),data[ss][key]['elapsed'])
