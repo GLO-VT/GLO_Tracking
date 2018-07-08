@@ -20,6 +20,7 @@ import sys
 import cv2
 import ephem
 import os
+from glob import glob
 
 
 class SS_tracking:
@@ -216,11 +217,65 @@ class SS_tracking:
         dir_date = time.strftime("%Y%m%d")+'/'
         if not os.path.exists(self.save_dir+dir_date):
             os.makedirs(self.save_dir+dir_date)  
-        
+        #find all csv files in today's folder 
+        file_list = glob(self.save_dir+dir_date+ '/*.csv')
+        run_number=0
+        #loop through list 
+        if(len(file_list)!=0): #only check list if is not empty, if empty leave run number as zero
+            for i in range(len(file_list)):
+                run = file_list[i].split('RUN')[-1].split('.')[0]
+                if int(run) >= run_number: 
+                    run_number = int(run)+1 #make the run number one larger than the largest
+            
         #Save data to file   
         for i in range(len(self.ss_read)):
             print('saving ss',str(ss_read[i]),'tracking data to',self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'.csv')
-            self.data['ss'+str(ss_read[i])].to_csv(self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'.csv',index_label='time')
+            f_name=self.save_dir+dir_date+'ss_track_ss'+str(ss_read[i])+'_'+file_time+'_RUN'+str(run_number)+'.csv'
+            self.data['ss'+str(ss_read[i])].to_csv(f_name,index_label='time')
+               
+            df = pd.read_csv(f_name, header=None, index_col=None)
+            n_cols=len(df.columns)
+            header=[]
+            for j in range(n_cols):
+                header.append('')
+            #insert desired values into header[] in format set out below 
+            header[0]=self.pid_x.Kp
+            header[1]=self.pid_y.Kp
+            header[2]=self.pid_x.Ki
+            header[3]=self.pid_y.Ki
+            header[4]=self.pid_x.Kd
+            header[5]=self.pid_y.Kd
+            header[6]=self.hz
+            header[7]=run_number
+            header[8]=self.track_mode
+            header[9]=self.filter_mode
+            header[10]=self.track_time
+            header[11]=self.ss_eshim_x
+            header[12]=self.ss_eshim_y
+            df.columns = header
+            df.to_csv(f_name, index=False)
+            
+            df = pd.read_csv(f_name, header=None, index_col=None)
+            n_cols=len(df.columns)
+            header=[]
+            for j in range(n_cols):
+                header.append('')
+            #add whatever strings to header 
+            header[0]='kpx'
+            header[1]='kpy'
+            header[2]='kix'
+            header[3]='kiy'
+            header[4]='kdx'
+            header[5]='kdy'
+            header[6]='hz'
+            header[7]='run'
+            header[8]='track_mode'
+            header[9]='filter_mode'
+            header[10]='track_time'
+            header[11]='eshim_x'
+            header[12]='eshim_y'
+            df.columns = header
+            df.to_csv(f_name, index=False)
                
     def run(self):
         '''
