@@ -189,17 +189,8 @@ class SS_tracking:
                 self.ptu.cmd('ps1000 ')
                 time.sleep(0.1)
                 self.ptu.cmd('ts1000 ')
-            #Absolute Velocity Mode
-            if self.track_mode == 2:
-                self.ptu.cmd('cv ')
-                time.sleep(0.1)
-                self.ptu.cmd('i ')
-                time.sleep(0.1)
-                self.ptu.cmd('ps0 ')
-                time.sleep(0.1)
-                self.ptu.cmd('ts0 ')
-            #Differential Velocity Mode
-            if self.track_mode == 3:
+            #Velocity Mode
+            if (self.track_mode == 2) | (self.track_mode == 3):
                 self.ptu.cmd('cv ')
                 time.sleep(0.1)
                 self.ptu.cmd('i ')
@@ -359,22 +350,29 @@ class SS_tracking:
             self.ang_y_track = np.nanmean(ang_y)
             
             #Filter Step 2: apply desired filter (filter mode) to data in filter window
+            if self.filter_mode == 1:
+                #Don't need to filter the SS data any more
+                #Set imu filter values to nan if not using filtered data
+                self.imu_ang_r = self.imu.grab_ang_r()
+                self.imu_filt_x = self.imu_ang_r.x
+                self.imu_filt_y = self.imu_ang_r.y
+             
             if self.filter_mode > 1:
-                
                 #only start filtering after enough samples (size of filter window) have been recorded
-                if self.cnt > self.filter_win:
+                if self.cnt < self.filter_win:
+                    #Set imu filter values to raw values until have enough samples to filter
+                    self.imu_ang_r = self.imu.grab_ang_r()
+                    self.imu_filt_x = self.imu_ang_r.x
+                    self.imu_filt_y = self.imu_ang_r.y             
+                else:
                     #Create array of past data with number of elements=filter window size (self.filter_win)     
-                    ss_raw_x = np.array(self.data['ang_x_track'][-(self.filter_win-1):].tolist() + self.ang_x_track)
-                    ss_raw_y = np.array(self.data['ang_x_track'][-(self.filter_win-1):].tolist() + self.ang_y_track)
+                    ss_raw_x = np.array(self.data['ang_x_track'][-(self.filter_win-1):].tolist() + [self.ang_x_track])
+                    ss_raw_y = np.array(self.data['ang_x_track'][-(self.filter_win-1):].tolist() + [self.ang_y_track])
                     
                     #Collect IMU angular rates (current data stored within IMU class)
                     self.imu_ang_r = imu.grab_ang_r()
                     imu_raw_x = np.array(self.data['imu_ang_z'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.z])
                     imu_raw_y = np.array(self.data['imu_ang_y'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.y])
-                    
-                    if self.filter_mode == 1:
-                        self.imu_filt_x = self.ang_x_track
-                        self.imu_filt_y = self.ang_y_track
                     
                     if self.filter_mode == 2:  #Rolling mean (just take mean of samples in filter window)
                         self.ss_filt_x = np.nanmean(ss_raw_x)
@@ -391,22 +389,15 @@ class SS_tracking:
                         self.imu_filt_y = self.butter(imu_raw_y)
                         self.ang_x_track = self.ss_filt_x[-1]
                         self.ang_y_track = self.ss_filt_x[-1]
-                else:
-                    #Set imu filter values to nan if not using filtered data
-                    self.imu_ang_r = self.imu.grab_ang_r()
-                    self.imu_filt_x = self.imu_ang_r.x
-                    self.imu_filt_y = self.imu_ang_r.y
-            else:
-                #Set imu filter values to nan if not using filtered data
-                self.imu_ang_r = self.imu.grab_ang_r()
-                self.imu_filt_x = self.imu_ang_r.x
-                self.imu_filt_y = self.imu_ang_r.y
+        
+                    
+
       
             if self.track_mode == 1:   #PTU position-command mode: Simple PID control of ss offset
                 try:
                     self.pid_pos(self.ang_x_track,self.ang_y_track)  #Generate PID offset control outputs
-                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
-                    self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
+                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #PTU position command_x = PID_x control output
+                    self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #PTU position command_y = PID_y control output
                     if self.track_x:
                         self.ptu.cmd('po'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
                         time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
@@ -547,7 +538,7 @@ if __name__ == '__main__':
                         help='Filter mode')
     
     parser.add_argument('-fw','--filter_win',
-                        default=5,
+                        default=2,
                         type=int,
                         help='Filter window size')    
     
