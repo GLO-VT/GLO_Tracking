@@ -68,20 +68,18 @@ def grab_data(data_loc,header_len=2):
         print('crunching',run)
         data[run]={}
         for file in glob(data_loc+'/*RUN'+str(i)+'*'):  
-            for ss in ['ss1','ss2','ss3']:
-                if ss in file:
-                    data[run][ss]={}
-                    with open(file) as myfile:
-                        #Parse first row of ss data file for parameter labels
-                        labels = [next(myfile) for x in range(1)][0].split(',')
-                        #Parse second row of ss data file for parameter values
-                        values = [next(myfile) for x in range(1)][0].split(',')
-                    data[run][ss]['data']=pd.read_csv(file,index_col='time',header=header_len)
+            data[run]={}
+            with open(file) as myfile:
+                #Parse first row of ss data file for parameter labels
+                labels = [next(myfile) for x in range(1)][0].split(',')
+                #Parse second row of ss data file for parameter values
+                values = [next(myfile) for x in range(1)][0].split(',')
+                    data[run]['data']=pd.read_csv(file,index_col='time',header=header_len)
                     try:
                         #Convert imu z-axis angular rate from rad/sec to deg/sec
-                        data[run][ss]['data']['imu_ang_z']=data[run][ss]['data']['imu_ang_z']*180.0/np.pi
+                        data[run]['data']['imu_ang_z']=data[run]['data']['imu_ang_z']*180.0/np.pi
                         #Smooth out angular rate and take gradient to calculate yaw accelerations in deg/sec^2
-                        data[run][ss]['data']['accel']=np.gradient(data[run][ss]['data']['imu_ang_z'].rolling(30,center=True).mean(),data[run][ss]['data']['elapsed'])
+                        data[run]['data']['accel']=np.gradient(data[run]['data']['imu_ang_z'].rolling(30,center=True).mean(),data[run][ss]['data']['elapsed'])
                     except:
                         print('No IMU data for ',ss,file[i],i)
                         pass
