@@ -371,6 +371,9 @@ class SS_tracking:
                     
                     #Collect IMU angular rates (current data stored within IMU class)
                     self.imu_ang_r = imu.grab_ang_r()
+#                    imu_raw_x = (180./np.pi)*np.array(self.data['imu_ang_z'][-(self.filter_win-1):].tolist() + [(180./np.pi)*self.imu_ang_r.z])
+#                    imu_raw_y = (180./np.pi)*np.array(self.data['imu_ang_y'][-(self.filter_win-1):].tolist() + [(180./np.pi)*self.imu_ang_r.y])
+                    
                     imu_raw_x = np.array(self.data['imu_ang_z'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.z])
                     imu_raw_y = np.array(self.data['imu_ang_y'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.y])
                     
@@ -389,9 +392,6 @@ class SS_tracking:
                         self.imu_filt_y = self.butter(imu_raw_y)
                         self.ang_x_track = self.ss_filt_x[-1]
                         self.ang_y_track = self.ss_filt_x[-1]
-        
-                    
-
       
             if self.track_mode == 1:   #PTU position-command mode: Simple PID control of ss offset
                 try:
@@ -533,12 +533,12 @@ if __name__ == '__main__':
                         help='Tracking mode')
     
     parser.add_argument('-fm','--filter_mode',
-                        default=1,
+                        default=2,
                         type=int,
                         help='Filter mode')
     
     parser.add_argument('-fw','--filter_win',
-                        default=2,
+                        default=5,
                         type=int,
                         help='Filter window size')    
     
@@ -553,7 +553,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=60,
+                        default=120,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -574,7 +574,7 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=10.0,
+                        default=7.5,
                         type=float,
                         help='Proportional gain x-axis')
     
@@ -584,17 +584,17 @@ if __name__ == '__main__':
                         help='Proportional gain y-axis')
     
     parser.add_argument('-kdx','--kdx',
-                        default=0.0,
+                        default=5.0,
                         type=float,
                         help='Derivative gain x-axis')
     
     parser.add_argument('-kdy','--kdy',
-                        default=-0.3*0,
+                        default=-0.5,
                         type=float,
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=2.0,
+                        default=0.0,
                         type=float,
                         help='Integral gain x-axis')
     
@@ -607,12 +607,12 @@ if __name__ == '__main__':
 ######## Sun sensor parameters #################
     
     parser.add_argument('-ss1','--ss1_track',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Track with SS1 (True/False)')
     
     parser.add_argument('-ss2','--ss2_track',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='Track with SS2 (True/False)')
     
@@ -818,7 +818,7 @@ if __name__ == '__main__':
         SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate)]
     
     #List of sun sensors to read data from (reduce number of sensors to increase sampling rate)
-    ss_read = [1]
+    ss_read = [2]
     
     #List of sun sensors to use for tracking
     ss_track = []
@@ -930,23 +930,28 @@ if __name__ == '__main__':
             print('could not close sun sensor',i)
         
     try:
+    
         #Plot y_angle raw vs. filtered 
         x=df['elapsed']
-        y1=df['ss1_x_raw']
-        y2=df['ss1_y_raw']
+        y1=df['imu_ang_z']
+        y2=df['imu_filt_x']
+        y3=df['ss2_x_raw']
+        y4=df['ang_x_track']
         
         plt.figure(1)
-        plt.plot(x,y1,'o-',label='ss1ang_x_raw')
+        plt.plot(x,y1,'o-',label='imu_ang_z')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
         plt.title('X-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
         plt.legend()
         
-        plt.figure(2)
-        plt.plot(x,y2,'o-',label='ss1_ang_y_raw')
+        #plt.figure(2)
+        plt.plot(x,y2,'o-',label='imu_filt_x')
+        plt.plot(x,y3,'o-',label='ss2_ang_x_raw')
+        plt.plot(x,y4,'o-',label='filtered ss')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
-        plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
+        #plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
         plt.legend()
     except:
         print('Failed to plot data')
