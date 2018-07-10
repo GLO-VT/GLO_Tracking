@@ -59,10 +59,23 @@ class IMU:
             pass #do nothing
         self.ypr = self.imu.current_data.yaw_pitch_roll
         return self.ypr
+    
+    def change_baudrate(self,baudrate):
+        '''
+        change baudrate of imu
+        '''
+        self.baudrate = baudrate
+        self.imu.sensor.change_baudrate(self.baudrate)
+        self.imu.sensor.disconnect()
+        try:
+            self.imu = EzAsyncData.connect(self.com_port,self.baudrate)
+        except:
+            print('Tried to change IMU baudrate to',self.baudrate,'...could not reconnect to IMU')
+            return
                   
 #if __name__ == '__main__':
 #    
-#    #Create a ptu object, define com_port and baudrate
+#    #Create an imu object, define com_port and baudrate
 #    imu = IMU(com_port='COM7',baudrate=115200) #921600
 #    
 #    imu.grab_accel()
@@ -84,4 +97,13 @@ class IMU:
 #    #Disconnect from imu
 #    imu.imu.disconnect()
 #    
-    
+#    #Create an imu object, define com_port and baudrate
+#    imu = IMU(com_port='COM7',baudrate=115200) #921600
+#    imu.change_baudrate(921600)
+#    imu.imu.disconnect()
+#    imu = IMU(com_port='COM7',baudrate=921600)    
+#    N=1000
+#    imu_ang_z = np.zeros(N)
+#    for i in range(N):
+            
+        
