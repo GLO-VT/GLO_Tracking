@@ -66,61 +66,59 @@ def grab_data(data_loc,header_len=2):
     for i in range(runs+1):
         run='run'+str(i)
         print('crunching',run)
-        data[run]={}
         for file in glob(data_loc+'/*RUN'+str(i)+'*'):  
-            data[run]={}
             with open(file) as myfile:
                 #Parse first row of ss data file for parameter labels
                 labels = [next(myfile) for x in range(1)][0].split(',')
                 #Parse second row of ss data file for parameter values
                 values = [next(myfile) for x in range(1)][0].split(',')
-                    data[run]['data']=pd.read_csv(file,index_col='time',header=header_len)
-                    try:
-                        #Convert imu z-axis angular rate from rad/sec to deg/sec
-                        data[run]['data']['imu_ang_z']=data[run]['data']['imu_ang_z']*180.0/np.pi
-                        #Smooth out angular rate and take gradient to calculate yaw accelerations in deg/sec^2
-                        data[run]['data']['accel']=np.gradient(data[run]['data']['imu_ang_z'].rolling(30,center=True).mean(),data[run][ss]['data']['elapsed'])
-                    except:
-                        print('No IMU data for ',ss,file[i],i)
-                        pass
-                    data[run][ss]['data'].index = pd.to_datetime(data[run][ss]['data'].index)
-                    data[run][ss]['data']['elapsed']=(data[run][ss]['data'].index-data[run][ss]['data'].index[0]).seconds+(data[run][ss]['data'].index-data[run][ss]['data'].index[0]).microseconds/1e6
-                    #Load in parameters from header
-                    data[run][ss]['data']['ss']=ss
-                    data[run][ss]['data']['kpx']=float(values[0])
-                    data[run][ss]['data']['kpy']=float(values[1])
-                    data[run][ss]['data']['kix']=float(values[2])
-                    data[run][ss]['data']['kiy']=float(values[3])
-                    data[run][ss]['data']['kdx']=float(values[4])
-                    data[run][ss]['data']['kdy']=float(values[5])
-                    data[run][ss]['data']['hz']=int(values[6])
-                    data[run][ss]['data']['run']=int(values[7])
-                    data[run][ss]['data']['track_mode']=int(values[8])
-                    data[run][ss]['data']['filter_mode']=int(values[9])
-                    data[run][ss]['data']['track_time']=float(values[10])
-                    data[run][ss]['data']['eshim_x_ss1']=float(values[11].split('(')[-1])
-                    data[run][ss]['data']['eshim_x_ss2']=float(values[12].split(' ')[-1])
-                    data[run][ss]['data']['eshim_x_ss3']=float(values[13].split(' ')[-1].split(')')[0])
-                    data[run][ss]['data']['eshim_y_ss1']=float(values[14].split('(')[-1])
-                    data[run][ss]['data']['eshim_y_ss2']=float(values[15].split(' ')[-1])
-                    data[run][ss]['data']['eshim_y_ss3']=float(values[16].split(' ')[-1].split(')')[0])
-                    if ss=='ss1':
-                        x_raw_ss1.append(data[run][ss]['data']['ang_x_raw'].values)
-                        y_raw_ss1.append(data[run][ss]['data']['ang_y_raw'].values)
-                        x_track_ss1.append(data[run][ss]['data']['ang_x_track'].values)
-                        y_track_ss1.append(data[run][ss]['data']['ang_y_track'].values)
-                        ptu_cmd_x.append(data[run][ss]['data']['ptu_cmd_x'].values)
-                        ptu_cmd_y.append(data[run][ss]['data']['ptu_cmd_y'].values)
-                        imu_ang_z.append(data[run][ss]['data']['imu_ang_z'].values)
-                    if ss=='ss2':
-                        x_raw_ss2.append(data[run][ss]['data']['ang_x_raw'].values)
-                        y_raw_ss2.append(data[run][ss]['data']['ang_y_raw'].values)
-                        x_track_ss2.append(data[run][ss]['data']['ang_x_track'].values)
-                        y_track_ss2.append(data[run][ss]['data']['ang_y_track'].values)
-                     
-                        
-                    data_all = data_all.append(data[run][ss]['data'])
-                    #data_all['elapsed']=data_all
+                data[run]=pd.read_csv(file,index_col='time',header=header_len)
+                try:
+                    #Convert imu z-axis angular rate from rad/sec to deg/sec
+                    data[run]['imu_ang_z']=data[run]['imu_ang_z']*180.0/np.pi
+                    #Smooth out angular rate and take gradient to calculate yaw accelerations in deg/sec^2
+                    data[run]['accel']=np.gradient(data[run]['imu_ang_z'].rolling(30,center=True).mean(),data[run]['elapsed'])
+                except:
+                    print('No IMU data for ',ss,file[i],i)
+                    pass
+                data[run].index = pd.to_datetime(data[run].index)
+                data[run]['elapsed']=(data[run].index-data[run].index[0]).seconds+(data[run].index-data[run].index[0]).microseconds/1e6
+                #Load in parameters from header
+#                data[run]['ss']=ss
+                data[run]['kpx']=float(values[0])
+                data[run]['kpy']=float(values[1])
+                data[run]['kix']=float(values[2])
+                data[run]['kiy']=float(values[3])
+                data[run]['kdx']=float(values[4])
+                data[run]['kdy']=float(values[5])
+                data[run]['hz']=int(values[6])
+                data[run]['run']=int(values[7])
+                data[run]['track_mode']=int(values[8])
+                data[run]['filter_mode']=int(values[9])
+                data[run]['track_time']=float(values[10])
+                data[run]['eshim_x_ss1']=float(values[11].split('(')[-1])
+                data[run]['eshim_x_ss2']=float(values[12].split(' ')[-1])
+                data[run]['eshim_x_ss3']=float(values[13].split(' ')[-1].split(')')[0])
+                data[run]['eshim_y_ss1']=float(values[14].split('(')[-1])
+                data[run]['eshim_y_ss2']=float(values[15].split(' ')[-1])
+                data[run]['eshim_y_ss3']=float(values[16].split(' ')[-1].split(')')[0])
+#                if ss=='ss1':
+#                    x_raw_ss1.append(data[run]['ang_x_raw'].values)
+#                    y_raw_ss1.append(data[run]['ang_y_raw'].values)
+#                    x_track_ss1.append(data[run]['ang_x_track'].values)
+#                    y_track_ss1.append(data[run]['ang_y_track'].values)
+#                    ptu_cmd_x.append(data[run]['ptu_cmd_x'].values)
+#                    ptu_cmd_y.append(data[run]['ptu_cmd_y'].values)
+#                    imu_ang_z.append(data[run]['imu_ang_z'].values)
+#                if ss=='ss2':
+#                    x_raw_ss2.append(data[run]['ang_x_raw'].values)
+#                    y_raw_ss2.append(data[run]['ang_y_raw'].values)
+#                    x_track_ss2.append(data[run]['ang_x_track'].values)
+#                    y_track_ss2.append(data[run]['ang_y_track'].values)
+                 
+                    
+                data_all = data_all.append(data[run])
+                #data_all['elapsed']=data_all
     data_all.index = pd.to_datetime(data_all.index)
     data_all['elapsed']=(data_all.index-data_all.index[0]).seconds+(data_all.index-data_all.index[0]).microseconds/1e6
     data_all['diff']=data_all['elapsed'].diff()
@@ -152,7 +150,7 @@ header_len=2
 #data_loc_rpi = cwd + '/rpi_tracking_20180619/20180522/'
 #params_loc_rpi = cwd + '/20180619_Sun_Sensor_rpi_runs.txt'
 #data_rpi,data_rpi_all_ss1,data_rpi_all_ss2,data_rpi_all_ss3,data_rpi_all = grab_data(data_loc_rpi,params_loc_rpi)
-data_loc =  cwd+'/20180709'
+data_loc =  cwd+'/20180710'
 #params_loc = cwd + '/20180619_Sun_Sensor_laptop_runs.txt'
 data = grab_data(data_loc,header_len=header_len)
 #data_all_ss1 = data['data_all'].loc[data_all['ss']=='ss1',:]
@@ -226,13 +224,14 @@ if plot_accel_all:
     for i in range(data['num_runs']):    
         plt.figure()
         plt.subplot(2,1,1)
-        x=data['data']['run'+str(i)]['ss1']['data']['elapsed']
-        y1=data['data']['run'+str(i)]['ss1']['data']['imu_ang_z']*180./np.pi
-        y2=(data['data']['run'+str(i)]['ss1']['data']['imu_ang_z']*180./np.pi).rolling(30,center=True).mean()
+        x=data['data']['run'+str(i)]['elapsed']
+        y1=data['data']['run'+str(i)]['imu_ang_z']*180./np.pi
+        y2=(data['data']['run'+str(i)]['imu_ang_z']*180./np.pi).rolling(30,center=True).mean()
         y3=np.gradient(y2)
         plt.plot(x,y1,label='imu_ang_z')
         plt.plot(x,y2,label='imu_ang_z_rolling')
         plt.plot(x,y3,'-o',label='accel from rolling mean')
+        plt.title('Run',i)
         plt.legend()
         
         
@@ -248,34 +247,7 @@ if plot_accel_histogram_all:
     plt.title('Histogram of accelerations of all runs \n(acceleration calculated from rolling mean (window=30) of imu angular rate z-axis)')
 
 
-x=np.array([0,1,2])
-y=np.array([2,5,1])
-x=np.linspace(0,2*np.pi,1000)
-y=np.sin(x)
 
-def ddx(x,y):
-    return (np.array([2/((x[1]-x[0])*(x[2]-x[0])),
-                    -2/((x[2]-x[1])*(x[1]-x[0])),
-                    2/((x[2]-x[1])*(x[2]-x[0]))])*y.T).sum()
-    
-plt.figure()
-#plt.plot(x*180./np.pi,y,label='y')
-plt.plot(x*180./np.pi,np.gradient(np.gradient(y,x)),label='np.gradient(np.gradient)')
-#plt.ylim((-2,2))
-
-y_grad2=[]
-y_grad2.append(0.0)
-y_grad2.append(0.0)
-for i in range(2,len(x)):
-    y_grad2.append(np.gradient(np.gradient(y[i-2:i+1],x[i-2:i+1])).sum())
-plt.plot(x*180./np.pi,y_grad2) 
-
-y_numer2=[]
-y_numer2.append(0.0)
-y_numer2.append(0.0)  
-for i in range(2,len(x)):
-    y_numer2.append(ddx(x[i-2:i+1],y[i-2:i+1]))
-plt.plot(x*180./np.pi,y_numer2)
 
 
 #runs_all = pd.DataFrame()
