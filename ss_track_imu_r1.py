@@ -523,7 +523,7 @@ if __name__ == '__main__':
                         help='Tracking in x-axis')
 
     parser.add_argument('-ty','--track_y',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='Tracking in y-axis')
     
@@ -553,7 +553,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=120,
+                        default=60,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -579,7 +579,7 @@ if __name__ == '__main__':
                         help='Proportional gain x-axis')
     
     parser.add_argument('-kpy','--kpy',
-                        default=-0.44*0,
+                        default=-3.0,
                         type=float,
                         help='Proportional gain y-axis')
     
@@ -627,7 +627,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim x-axis')
     
     parser.add_argument('-ss2_ex','--ss2_eshim_x',
-                        default=0.0,
+                        default=-1.0,
                         type=float,
                         help='SS2 electronic shim x-axis')
     
@@ -642,7 +642,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim y-axis')
     
     parser.add_argument('-ss2_ey','--ss2_eshim_y',
-                        default=0.0,
+                        default=-1.0,
                         type=float,
                         help='SS2 electronic shim y-axis')
     
@@ -937,6 +937,8 @@ if __name__ == '__main__':
         y2=df['imu_filt_x']
         y3=df['ss2_x_raw']
         y4=df['ang_x_track']
+        y5=df['ss2_x_raw']
+        y6=df['ang_x_track']
         
         plt.figure(1)
         plt.plot(x,y1,'o-',label='imu_ang_z')
