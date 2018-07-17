@@ -29,7 +29,7 @@ class PTU:
         baudrate: (int) default baudrate = 19200, fastest baudrate = 115200
         cmd_delay: (int) delay (in seconds) to wait between ptu commands
     '''
-    def __init__(self,com_port='COM5',baudrate=9600,cmd_delay=0.025):
+    def __init__(self,com_port='COM6',baudrate=9600,cmd_delay=0.025):
         self.com_port = com_port
         self.baudrate = baudrate
         self.cmd_delay = cmd_delay
@@ -43,13 +43,13 @@ class PTU:
         self.tilt_pdeg_def = 38.89   #Corresponds to 92.5714 arc sec per position (half-step mode for ebay PTU)
         
         #Establish communication with PTU
-        try:
-            self.ptu = serial.Serial(port=self.com_port,baudrate=self.baudrate)
-            if self.ptu.isOpen():
-                self.cmd('i ')    #Send this command to PTU to make it respond to commands
-                print('Connected to PTU D300 Ebay (or not)')
-        except:
-            print('Could not connect to PTU')
+#        try:
+        self.ptu = serial.Serial(port=self.com_port,baudrate=self.baudrate)
+        if self.ptu.isOpen():
+            self.cmd('i ')    #Send this command to PTU to make it respond to commands
+            print('Connected to PTU D300 Ebay (or not)')
+#        except:
+#            print('Could not connect to PTU')
         
         #Determine pan/tilt PTU resolution and calculate conversion factors
         try:
@@ -184,32 +184,32 @@ class PTU:
             self.cmd(tilt_off)
             time.sleep(0.1)      
                   
-if __name__ == '__main__':
+#if __name__ == '__main__':
     
-    #Create a ptu object, define com_port and baudrate
-    ptu = PTU(com_port='COM5',baudrate=9600)
-    
-    #Check PTU step mode in both axes
-    print('Step mode pan axis: ',ptu.read('wp '))
-    print('Step mode tilt axis: ',ptu.read('wt '))
-    print('')
-    
-    #Set PTU to microstep mode
-    ptu.set_microstep()
-
-    
-#    Example 1) Point PTU at sun
-#               Need ephemeris data to point at sun
-    ep = ephem.Observer()
-    #Set latitude, longitude and altitude to Blacksburg, VA
-    ptu.lat, ptu.lon, ptu.alt = '37.205144','-80.417560', 634
-    ptu.utc_off=4   #Set UTC time offset of EST
-    
-    #Connect to IMU to get offset from magnetic North
-    imu = EzAsyncData.connect('COM7', 115200)
-    
-    ptu.ephem_point(ep,imu=imu,target='sun')
-    input('Press any key when PTU is pointed at the sun')
+#    #Create a ptu object, define com_port and baudrate
+#    ptu = PTU(com_port='COM6',baudrate=9600)
+#    
+#    #Check PTU step mode in both axes
+#    print('Step mode pan axis: ',ptu.read('wp '))
+#    print('Step mode tilt axis: ',ptu.read('wt '))
+#    print('')
+#    
+#    #Set PTU to microstep mode
+#    ptu.set_microstep()
+#
+#    
+##    Example 1) Point PTU at sun
+##               Need ephemeris data to point at sun
+#    ep = ephem.Observer()
+#    #Set latitude, longitude and altitude to Blacksburg, VA
+#    ptu.lat, ptu.lon, ptu.alt = '37.205144','-80.417560', 634
+#    ptu.utc_off=4   #Set UTC time offset of EST
+#    
+#    #Connect to IMU to get offset from magnetic North
+#    imu = EzAsyncData.connect('COM5', 115200)
+#    
+#    ptu.ephem_point(ep,imu=imu,target='sun')
+#    input('Press any key when PTU is pointed at the sun')
 #   
 #    
 #    #Track the sun for approximately 10 seconds using ephemeris data

@@ -11,6 +11,7 @@ from ptu import PTU
 from ss import SS
 
 import time
+import random
 import argparse
 from datetime import datetime
 import pandas as pd
@@ -81,7 +82,7 @@ class SS_tracking:
                  track_x=True,
                  track_y=True,
                  screen_res=(1280,800),
-                 read_dir
+                 read_dir=None
                  ):
         
         #Initialize parameters
@@ -113,12 +114,12 @@ class SS_tracking:
         #Initialized dataframe to store data  
         self.data = pd.DataFrame(columns=['ang_x_track',
                                           'ang_y_track',
-                                          'ss1_x_raw',
-                                          'ss1_y_raw',
-                                          'ss2_x_raw',
-                                          'ss2_y_raw',
-                                          'ss3_x_raw',
-                                          'ss3_y_raw',
+#                                          'ss1_x_raw',
+#                                          'ss1_y_raw',
+#                                          'ss2_x_raw',
+#                                          'ss2_y_raw',
+#                                          'ss3_x_raw',
+#                                          'ss3_y_raw',
                                           'ptu_cmd_x',
                                           'ptu_cmd_y',
                                           'imu_accel_x',
@@ -334,10 +335,12 @@ class SS_tracking:
             try:
                 with open(self.read_dir) as f:
                     data = f.read()
-                    self.ang_x_track = float(data.split(',')[0])
-                    self.ang_y_track = float(data.split(',')[1])
+                    self.ang_x_track = float(data.split(',')[0])#+random.gauss(0,0.005)/10
+                    self.ang_y_track = float(data.split(',')[1])#+random.gauss(0,0.005)/10
             except:
                 print('Could not read camera degree offsets from file')
+                self.ang_x_track = np.nan
+                self.ang_y_track = np.nan
             print('sun center at ',self.ang_x_track,self.ang_y_track)
             
             #Filter Step 2: apply desired filter (filter mode) to data in filter window
@@ -455,12 +458,12 @@ class SS_tracking:
             self.imu_mag=self.imu.grab_mag()
             data_add = [self.ang_x_track,
                         self.ang_y_track,
-                        ang_x[0],
-                        ang_y[0],
-                        ang_x[1],
-                        ang_y[1],
-                        ang_x[2],
-                        ang_y[2],
+#                        ang_x[0],
+#                        ang_y[0],
+#                        ang_x[1],
+#                        ang_y[1],
+#                        ang_x[2],
+#                        ang_y[2],
                         self.ptu_cmd_x,
                         self.ptu_cmd_y,
                         self.imu_accel.x,
@@ -514,7 +517,7 @@ if __name__ == '__main__':
                         help='Tracking in x-axis')
 
     parser.add_argument('-ty','--track_y',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Tracking in y-axis')
     
@@ -544,7 +547,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=60,
+                        default=240,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -559,7 +562,7 @@ if __name__ == '__main__':
                         help='Directory to save data to')
     
     parser.add_argument('-r','--read_dir',
-                        default=cwd+'/testing/',
+                        default=cwd+'/Data.txt',
                         type=str,
                         help='Directory to read camera position from')
     
@@ -570,7 +573,7 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=3.7802,
+                        default=4.1,
                         type=float,
                         help='Proportional gain x-axis')
     
@@ -580,7 +583,7 @@ if __name__ == '__main__':
                         help='Proportional gain y-axis')
     
     parser.add_argument('-kdx','--kdx',
-                        default=-0.028087,
+                        default=0.39,
                         type=float,
                         help='Derivative gain x-axis')
     
@@ -590,7 +593,7 @@ if __name__ == '__main__':
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=40.3026,
+                        default=2.1,
                         type=float,
                         help='Integral gain x-axis')
     
@@ -623,7 +626,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim x-axis')
     
     parser.add_argument('-ss2_ex','--ss2_eshim_x',
-                        default=-1.0,
+                        default=0.0,
                         type=float,
                         help='SS2 electronic shim x-axis')
     
@@ -638,7 +641,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim y-axis')
     
     parser.add_argument('-ss2_ey','--ss2_eshim_y',
-                        default=-1.0,
+                        default=0.0,
                         type=float,
                         help='SS2 electronic shim y-axis')
     
@@ -648,7 +651,7 @@ if __name__ == '__main__':
                         help='SS3 electronic shim y-axis')
     
     parser.add_argument('-ss1_c','--ss1_com_port',
-                        default='COM6',
+                        default='COM8',
                         type=str,
                         help='SS1 comm port')
     
@@ -694,7 +697,7 @@ if __name__ == '__main__':
     
 ###### IMU parameters ###########
     parser.add_argument('-imu_c','--imu_com_port',
-                        default='COM7',
+                        default='COM5',
                         type=str,
                         help='IMU comm port')    
     
@@ -706,7 +709,7 @@ if __name__ == '__main__':
     
 ###### PTU parameters ###########
     parser.add_argument('-ptu_c','--ptu_com_port',
-                        default='COM5',
+                        default='COM6',
                         type=str,
                         help='IMU comm port')    
     
@@ -815,7 +818,7 @@ if __name__ == '__main__':
         SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate)]
     
     #List of sun sensors to read data from (reduce number of sensors to increase sampling rate)
-    ss_read = [2]
+    ss_read = [0]
     
     #List of sun sensors to use for tracking
     ss_track = []
@@ -843,9 +846,10 @@ if __name__ == '__main__':
     
     #Establish communication with PTU
     ptu_cmd_delay=params.ptu_cmd_delay #0.010
-    ptu = PTU(com_port=params.ptu_com_port,
-              baudrate=params.ptu_baud_rate,
-              cmd_delay=params.ptu_cmd_delay)
+    ptu = PTU(com_port='COM6',baudrate=9600)
+#    ptu = PTU(com_port=params.ptu_com_port,
+#              baudrate=params.ptu_baud_rate,
+#              cmd_delay=params.ptu_cmd_delay)
     #Set latitude, longitude and altitude to Blacksburg, VA for sun pointing
     ptu.lat, ptu.lon, ptu.alt = params.ptu_lat,params.ptu_lon,params.ptu_alt  #'37.205144','-80.417560', 634
     ptu.utc_off=params.ptu_utc_off #4   #Set UTC time offset of EST
@@ -933,10 +937,10 @@ if __name__ == '__main__':
         x=df['elapsed']
         y1=df['imu_ang_z']
         y2=df['imu_filt_x']
-        y3=df['ss2_x_raw']
+#        y3=df['ss2_x_raw']
         y4=df['ang_x_track']
-        y5=df['ss2_x_raw']
-        y6=df['ang_x_track']
+#        y5=df['ss2_x_raw']
+        y6=df['ang_y_track']
         
         plt.figure(1)
         plt.plot(x,y1,'o-',label='imu_ang_z')
@@ -947,7 +951,7 @@ if __name__ == '__main__':
         
         #plt.figure(2)
         plt.plot(x,y2,'o-',label='imu_filt_x')
-        plt.plot(x,y3,'o-',label='ss2_ang_x_raw')
+#        plt.plot(x,y3,'o-',label='ss2_ang_x_raw')
         plt.plot(x,y4,'o-',label='filtered ss')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')

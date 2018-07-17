@@ -601,7 +601,7 @@ if __name__ == '__main__':
                         save_dir=save_dir,
                         show_display=show_display,
                         UDP_IP=UDP_IP,
-                        UDP_PORT=UDP_PORT
+                        UDP_PORT=UDP_PORT,
                         read_data_dir=read_data_dir
                         )
     
