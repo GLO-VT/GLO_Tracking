@@ -394,8 +394,8 @@ class SS_tracking:
 #                    imu_raw_x = (180./np.pi)*np.array(self.data['imu_ang_z'][-(self.filter_win-1):].tolist() + [(180./np.pi)*self.imu_ang_r.z])
 #                    imu_raw_y = (180./np.pi)*np.array(self.data['imu_ang_y'][-(self.filter_win-1):].tolist() + [(180./np.pi)*self.imu_ang_r.y])
                     
-                    imu_raw_x = np.array(self.data['imu_ang_z'][-(10+self.filter_win-1):].tolist() + [self.imu_ang_r.z])
-                    imu_raw_y = np.array(self.data['imu_ang_y'][-(10+self.filter_win-1):].tolist() + [self.imu_ang_r.y])
+                    imu_raw_x = np.array(self.data['imu_ang_z'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.z])
+                    imu_raw_y = np.array(self.data['imu_ang_y'][-(self.filter_win-1):].tolist() + [self.imu_ang_r.y])
                     
                     if self.filter_mode == 2:  #Rolling mean (just take mean of samples in filter window)
                         self.ss_filt_x = np.nanmean(ss_raw_x)
@@ -573,7 +573,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=60,
+                        default=240,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -599,7 +599,7 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=36.2,
+                        default=12.53,
                         type=float,
                         help='Proportional gain x-axis')
     
@@ -609,7 +609,7 @@ if __name__ == '__main__':
                         help='Proportional gain y-axis')
     
     parser.add_argument('-kdx','--kdx',
-                        default=6.28,
+                        default=0.0,
                         type=float,
                         help='Derivative gain x-axis')
     
@@ -619,7 +619,7 @@ if __name__ == '__main__':
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=0.0,
+                        default=0,
                         type=float,
                         help='Integral gain x-axis')
     
@@ -976,10 +976,10 @@ if __name__ == '__main__':
         plt.legend()
         
         #plt.figure(2)
-        plt.plot(x,y2,'o-',label='imu_filt_x')
-#        plt.plot(x,y3,'o-',label='ss2_ang_x_raw')
-        plt.plot(x,y4,'o-',label='filtered ss')
-        plt.plot(x,y6,'o-',label='ptu cmd x')
+       # plt.plot(x,y2,'o-',label='imu_filt_x')
+        plt.plot(x,y4,'o-',label='ss2_ang_x_raw')
+       # plt.plot(x,y4,'o-',label='filtered ss')
+       # plt.plot(x,y6,'o-',label='ptu cmd x')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
         #plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
