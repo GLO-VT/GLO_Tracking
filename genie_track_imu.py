@@ -12,6 +12,7 @@ from ss import SS
 
 import time
 import random
+import scipy.io as sio
 import argparse
 from datetime import datetime
 import pandas as pd
@@ -303,6 +304,31 @@ class SS_tracking:
         header[12]='eshim_y'
         df.columns = header
         df.to_csv(f_name, index=False)
+        
+        #Save data as matlab .mat file for simulation
+        sio.savemat(cwd+'/run'+str(run_number)+'.mat',
+                    {'elapsed':self.data['elapsed'].values,
+                     'imu_filt_x':self.data['imu_filt_x'].values,
+                     'imu_filt_y':self.data['imu_filt_y'].values,
+                     'imu_ang_x':self.data['imu_ang_x'].values,
+                     'imu_ang_y':self.data['imu_ang_y'].values,
+                     'imu_ang_z':self.data['imu_ang_z'].values,
+                     'ang_x_track':self.data['ang_x_track'].values,
+                     'ang_y_track':self.data['ang_y_track'].values,
+                     'ptu_cmd_x':self.data['ptu_cmd_x'].values,
+                     'ptu_cmd_y':self.data['ptu_cmd_y'].values,
+                     'kpx':self.pid_x.Kp,
+                     'kpy':self.pid_y.Kp,
+                     'kix':self.pid_x.Ki,
+                     'kiy':self.pid_y.Ki,
+                     'kdx':self.pid_x.Kd,
+                     'kdy':self.pid_y.Kd,
+                     'hz':self.hz,
+                     'track_mode':self.track_mode,
+                     'filter_mode':self.filter_mode,
+                     'track_time':self.track_time,
+                     'ss_eshim_x':self.ss_eshim_x,
+                     'ss_eshim_y':self.ss_eshim_y})
     
     def filter_butter(self,data):
         b = signal.firwin(self.filter_win, 0.004)
