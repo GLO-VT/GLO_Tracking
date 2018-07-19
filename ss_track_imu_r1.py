@@ -469,6 +469,7 @@ class SS_tracking:
     #                    self.ptu_cmd_x = np.nan
     #                    self.ptu_cmd_y = np.nan 
     #                    print('ptu command failed tracking mode 2')
+    #
                 else:
                     self.coarse_track()
                     
