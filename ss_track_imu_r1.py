@@ -21,6 +21,7 @@ import cv2
 import ephem
 import os
 from glob import glob
+from scipy import zeros,signal
 
 
 class SS_tracking:
@@ -64,7 +65,7 @@ class SS_tracking:
                  ss,
                  ptu,
                  imu,
-                 ss_read=[1,2,3],
+                 ss_read=[1,2,3,4],
                  ss_track=[1,2,3],
                  ss_eshim_x=[0.0,0.0,0.0],
                  ss_eshim_y=[0.0,0.0,0.0],
@@ -80,7 +81,10 @@ class SS_tracking:
                  show_display=True,
                  track_x=True,
                  track_y=True,
-                 screen_res=(1280,800)
+                 screen_res=(1280,800),
+                 coarse_point=True,
+                 coarse_lim_x=3.0,
+                 coarse_lim_y=3.0
                  ):
         
         #Initialize parameters
@@ -107,6 +111,7 @@ class SS_tracking:
         self.max_vel_x = 1.0
         self.max_vel_y = 1.0
         self.screen_res = screen_res
+        self.coarse_point = True
     
         #Initialized dataframe to store data  
         self.data = pd.DataFrame(columns=['ang_x_track',
@@ -307,8 +312,38 @@ class SS_tracking:
         butter = zeros(data.size)
         for i, x in enumerate(data):
             butter[i], z = signal.lfilter(b, 1, [x], zi=z)
-        return butter      
+        return butter    
+    
+    def coarse_track(self):
+        '''
+        Check to see if position offset if negative or positve then send a ptu velocity
+        command in the opposite direction
+        '''
+        if self.ang_x_coarse != 0.0:
+            if self.track_x:
+                if self.ang_x_track <= -self.coarse_lim_x:  
+                    self.ptu.cmd('ps'+str(self.coarse_vel_x)+' ')    #Send PTU command to pan axis
+                    time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
+                if self.ang_x_track >= self.coarse_lim_x: 
+                    self.ptu.cmd('ps'+str(-self.coarse_vel_x)+' ')    #Send PTU command to pan axis
+                    time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
+        else:
+            #Set ptu velocity in both axes to zero if coarse sun sensor does not see sun
+            self.ptu.cmd('ps0 ')  
+            time.sleep(self.ptu_cmd_delay)
+            self.ptu.cmd('ts0 ')  
         
+        if self.ang_x_coarse != 0.0:
+            if self.track_y:
+                if self.ang_y_track <= -self.coarse_lim_y:
+                    self.ptu.cmd('ts'+str(self.coarse_vel_x)+' ')    #Send PTU command to pan axis
+                if self.ang_y_track >= self.coarse_lim_y:
+                    self.ptu.cmd('ts'+str(-self.coarse_vel_x)+' ')    #Send PTU command to pan axis
+        else:
+            #Set ptu velocity in both axes to zero if coarse sun sensor does not see sun
+            self.ptu.cmd('ps0 ')  #Set ptu velocity to zero if coarse sun sensor does not see sun
+            time.sleep(self.ptu_cmd_delay)
+            self.ptu.cmd('ts0 ')  #Set ptu velocity to zero if coarse sun sensor does not see sun
            
     def run(self):
         '''
@@ -337,17 +372,24 @@ class SS_tracking:
             ang_x.fill(np.nan)
             ang_y.fill(np.nan)
             
-            #Collect Sun Sensor data
+            #Collect Fine Sun Sensor data
             for i in ss_read:    #Loop through all sun sensors
                 self.ss[i-1].read_data_all()    #Read all data from sun sensor using SS class      
                 if i in self.ss_track:   #Only include x and y SS offsets if included in ss_track
                     ang_x[i-1] = self.ss[i-1].ang_x_raw + self.ss_eshim_x[i-1]
                     ang_y[i-1] = self.ss[i-1].ang_y_raw + self.ss_eshim_y[i-1]
- 
+            
+            #Collect Coarse Sun Sensor Data
+            self.ss[3].read_data_all()
+            self.ang_x_coarse = self.ss[3].ang_x_raw + self.ss_eshim_x[3]
+            self.ang_y_coarse = self.ss[3].ang_y_raw + self.ss_eshim_y[3]
+            
             #Filter Step 1; Sun Sensor data:
             #Take the mean of all sun sensors listed in ss_track
             self.ang_x_track = np.nanmean(ang_x)
             self.ang_y_track = np.nanmean(ang_y)
+            
+            self.ss_error = np.nansum(ang_x)+np.nansum(ang_y)  #If all ss values add to zero, then no sun sensor can see the sun
             
             #Filter Step 2: apply desired filter (filter mode) to data in filter window
             if self.filter_mode == 1:
@@ -394,54 +436,63 @@ class SS_tracking:
                         self.ang_y_track = self.ss_filt_x[-1]
       
             if self.track_mode == 1:   #PTU position-command mode: Simple PID control of ss offset
-                try:
-                    self.pid_pos(self.ang_x_track,self.ang_y_track)  #Generate PID offset control outputs
-                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #PTU position command_x = PID_x control output
-                    self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #PTU position command_y = PID_y control output
-                    if self.track_x:
-                        self.ptu.cmd('po'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
-                        time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
-                    if self.track_y:
-                        self.ptu.cmd('to'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
-                except:
-                    self.ptu_cmd_x = np.nan
-                    self.ptu_cmd_y = np.nan 
+                if (np.abs(self.ang_x_track) <= self.coarse_lim_x) | (np.abs(self.ang_y_track) <= self.coarse_lim_y) | (self.ss_error != 0.0):
+                    try:
+                        self.pid_pos(self.ang_x_track,self.ang_y_track)  #Generate PID offset control outputs
+                        self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #PTU position command_x = PID_x control output
+                        self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #PTU position command_y = PID_y control output
+                        if self.track_x:
+                            self.ptu.cmd('po'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
+                            time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
+                        if self.track_y:
+                            self.ptu.cmd('to'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
+                    except:
+                        self.ptu_cmd_x = np.nan
+                        self.ptu_cmd_y = np.nan 
+                else:
+                    self.coarse_track()
             
             if self.track_mode == 2:   #PTU velocity-command mode: -imu velocity + PID control of ss position
 #                try:
-                self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
-                self.ptu_cmd_x = -self.imu_filt_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
-                self.ptu_cmd_y = -self.imu_filt_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
-                if self.track_x:
-                    self.ptu.cmd('ps'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
-                    print('ps'+str(self.ptu_cmd_x)+' ')
-                    time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
-                if self.track_y:
-                    self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
-                    print('ts'+str(self.ptu_cmd_y)+' ')
-#                except:
-#                    self.ptu_cmd_x = np.nan
-#                    self.ptu_cmd_y = np.nan 
-#                    print('ptu command failed tracking mode 2')
-                    
-            if self.track_mode == 3:   #PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position
-                try:
+                if (np.abs(self.ang_x_track) <= self.coarse_lim_x) | (np.abs(self.ang_y_track) <= self.coarse_lim_y) | (self.ss_error != 0.0):
                     self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
-                    try:
-                        self.ss_vel_x = (self.ss_filt_x[-1] - self.ss_filt_x[-3])/(2*(self.dt))  #Calculate ss x position derivative (central diff) from filtered ss data
-                        self.ss_vel_y = (self.ss_filt_y[-1] - self.ss_filt_y[-3])/(2*(self.dt))  #Calculate ss y position derivative (central diff) from filtered ss data
-                    except:
-                        if self.filter_win < 3:
-                            print('Filter window size needs to be >= 3 for tracking mode 3 (need three points to calculate derivative accurately)')
-                        print('Cannot calculate SS velocity')
-                        
-                    self.ptu_cmd_x = -self.imu_filt_x[-1] - self.ss_vel_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
-                    self.ptu_cmd_y = -self.imu_filt_y[-1] - self.ss_vel_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
+                    self.ptu_cmd_x = -self.imu_filt_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
+                    self.ptu_cmd_y = -self.imu_filt_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
                     if self.track_x:
                         self.ptu.cmd('ps'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
+                        print('ps'+str(self.ptu_cmd_x)+' ')
                         time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
                     if self.track_y:
                         self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
+                        print('ts'+str(self.ptu_cmd_y)+' ')
+    #                except:
+    #                    self.ptu_cmd_x = np.nan
+    #                    self.ptu_cmd_y = np.nan 
+    #                    print('ptu command failed tracking mode 2')
+                else:
+                    self.coarse_track()
+                    
+            if self.track_mode == 3:   #PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position
+                try:
+                    if (np.abs(self.ang_x_track) <= self.coarse_lim_x) | (np.abs(self.ang_y_track) <= self.coarse_lim_y) | (self.ss_error != 0.0):
+                        self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
+                        try:
+                            self.ss_vel_x = (self.ss_filt_x[-1] - self.ss_filt_x[-3])/(2*(self.dt))  #Calculate ss x position derivative (central diff) from filtered ss data
+                            self.ss_vel_y = (self.ss_filt_y[-1] - self.ss_filt_y[-3])/(2*(self.dt))  #Calculate ss y position derivative (central diff) from filtered ss data
+                        except:
+                            if self.filter_win < 3:
+                                print('Filter window size needs to be >= 3 for tracking mode 3 (need three points to calculate derivative accurately)')
+                            print('Cannot calculate SS velocity')
+                            
+                        self.ptu_cmd_x = -self.imu_filt_x[-1] - self.ss_vel_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
+                        self.ptu_cmd_y = -self.imu_filt_y[-1] - self.ss_vel_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
+                        if self.track_x:
+                            self.ptu.cmd('ps'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
+                            time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
+                        if self.track_y:
+                            self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
+                    else:
+                        self.coarse_track()
                 except:
                     self.ptu_cmd_x = np.nan
                     self.ptu_cmd_y = np.nan
@@ -526,6 +577,26 @@ if __name__ == '__main__':
                         default=True,
                         type=bool,
                         help='Tracking in y-axis')
+    
+    parser.add_argument('-ct','--track_coarse',
+                        default=True,
+                        type=bool,
+                        help='Coarse tracking with SS4')
+    
+    parser.add_argument('-cx','--coarse_lim_x',
+                        default=3.0,
+                        type=float,
+                        help='Coarse tracking angle limit x')
+    
+    parser.add_argument('-cy','--coarse_lim_y',
+                        default=3.0,
+                        type=float,
+                        help='Coarse tracking angle limit y')
+    
+    parser.add_argument('-cy','--coarse_vel',
+                        default=2.0,
+                        type=float,
+                        help='Coarse tracking velocity')
     
     parser.add_argument('-tm','--track_mode',
                         default=2,
@@ -621,6 +692,11 @@ if __name__ == '__main__':
                         type=bool,
                         help='Track with SS3 (True/False)')
     
+    parser.add_argument('-ss4','--ss4_track',
+                        default=False,
+                        type=bool,
+                        help='Track with SS4 (True/False)')
+    
     parser.add_argument('-ss1_ex','--ss1_eshim_x',
                         default=0.0,
                         type=float,
@@ -635,6 +711,11 @@ if __name__ == '__main__':
                         default=0.0,
                         type=float,
                         help='SS3 electronic shim x-axis')
+    
+    parser.add_argument('-ss4_ex','--ss4_eshim_x',
+                        default=0.0,
+                        type=float,
+                        help='SS4 electronic shim x-axis')
     
     parser.add_argument('-ss1_ey','--ss1_eshim_y',
                         default=0.0,
@@ -651,6 +732,11 @@ if __name__ == '__main__':
                         type=float,
                         help='SS3 electronic shim y-axis')
     
+    parser.add_argument('-ss4_ey','--ss4_eshim_y',
+                        default=0.0,
+                        type=float,
+                        help='SS4 electronic shim y-axis')
+    
     parser.add_argument('-ss1_c','--ss1_com_port',
                         default='COM6',
                         type=str,
@@ -665,6 +751,11 @@ if __name__ == '__main__':
                         default='COM8',
                         type=str,
                         help='SS3 com port')
+    
+    parser.add_argument('-ss4_c','--ss4_com_port',
+                        default='COM9',
+                        type=str,
+                        help='SS4 com port')
     
     parser.add_argument('-ss1_b','--ss1_baud_rate',
                         default=115200,
@@ -681,6 +772,11 @@ if __name__ == '__main__':
                         type=int,
                         help='SS3 baud_rate')
     
+    parser.add_argument('-ss4_b','--ss4_baud_rate',
+                        default=115200,
+                        type=int,
+                        help='SS4 baud_rate')
+    
     parser.add_argument('-ss1_i','--ss1_inst_id',
                         default=1,
                         type=int,
@@ -695,6 +791,11 @@ if __name__ == '__main__':
                         default=3,
                         type=int,
                         help='SS3 instrument id')
+    
+    parser.add_argument('-ss4_i','--ss4_inst_id',
+                        default=4,
+                        type=int,
+                        help='SS4 instrument id')
     
 ###### IMU parameters ###########
     parser.add_argument('-imu_c','--imu_com_port',
@@ -815,7 +916,8 @@ if __name__ == '__main__':
     #Establish communication with sun sensor/s - store in a list
     ss=[SS(inst_id=params.ss1_inst_id,com_port=params.ss1_com_port,baudrate=params.ss1_baud_rate),
         SS(inst_id=params.ss2_inst_id,com_port=params.ss2_com_port,baudrate=params.ss2_baud_rate),
-        SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate)]
+        SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate),
+        SS(inst_id=params.ss4_inst_id,com_port=params.ss4_com_port,baudrate=params.ss4_baud_rate)]
     
     #List of sun sensors to read data from (reduce number of sensors to increase sampling rate)
     ss_read = [2]
@@ -833,10 +935,12 @@ if __name__ == '__main__':
 #    ss_eshim_y = [-2.290, -2.377, -2.215]          #Specify electronic shims (y-dir) for sun sensors
     ss_eshim_x = [params.ss1_eshim_x,
                   params.ss2_eshim_x,
-                  params.ss3_eshim_x]          #Specify electronic shims (x-dir) for sun sensors
+                  params.ss3_eshim_x,
+                  params.ss4_eshim_x]          #Specify electronic shims (x-dir) for sun sensors
     ss_eshim_y = [params.ss1_eshim_y,
                   params.ss2_eshim_y,
-                  params.ss3_eshim_y]          #Specify electronic shims (y-dir) for sun sensors
+                  params.ss3_eshim_y,
+                  params.ss4_eshim_y]          #Specify electronic shims (y-dir) for sun sensors
 
     print('eshims_x',ss_eshim_x)
     print('eshims_y',ss_eshim_y)
@@ -896,7 +1000,11 @@ if __name__ == '__main__':
                              save_dir=save_dir,
                              show_display=show_display,
                              track_x=params.track_x,
-                             track_y=params.track_y
+                             track_y=params.track_y,
+                             coarse_point=params.track_coarse,
+                             coarse_lim_x=params.coarse_lim_x,
+                             coarse_lim_y=params.coarse_lim_y,
+                             coarse_vel=params.coarse_vel
                              )
         
     print('Tracking with sun sensors',ss_track,'for',track_time,'seconds')
