@@ -68,15 +68,29 @@ if __name__ == '__main__':
     
     #Pan the PTU at max speed in one direction, stop, and pan in reverse direction
     #Create a ptu object, define com_port and baudrate
-    ptu_x = PTU(com_port='COM9',baudrate=9600)
-    ptu_x.cmd('@01J+\r')  #Set to positive velocity mode
-    time.sleep(0.1)
-    ptu_x.cmd('@01SSPD80000\r')  #move at 50,000 pos/sec
-    time.sleep(10)
-    ptu_x.cmd('@01STOP\r')
-    time.sleep(0.1)
-    ptu_x.cmd('@01J-\r')  #Set to positive velocity mode
-    time.sleep(0.1)
-    ptu_x.cmd('@01SSPD80000\r')  #move at 50,000 pos/sec
-    time.sleep(10)
-    ptu_x.cmd('@01STOP\r')
+#    ptu_x = PTU(com_port='COM9',baudrate=9600)
+##    ptu_x.cmd('@01J+\r')  #Set to positive velocity mode
+##    time.sleep(0.1)
+##    ptu_x.cmd('@01SSPD80000\r')  #move at 50,000 pos/sec
+##    time.sleep(10)
+##    ptu_x.cmd('@01STOP\r')
+##    time.sleep(0.1)
+##    ptu_x.cmd('@01J-\r')  #Set to positive velocity mode
+##    time.sleep(0.1)
+##    ptu_x.cmd('@01SSPD80000\r')  #move at 50,000 pos/sec
+##    time.sleep(10)
+#    ptu_x.cmd('@01STOP\r')
+#    time.sleep(0.1)
+#    ptu_x.cmd('@01J+\r')
+#    x=80000*np.sin(np.linspace(0,2*np.pi,100)) 
+#    for i in range(len(x)):
+#        time.sleep(0.05)
+#        ptu_x.cmd('@01SSPD'+str(x[i])+'\r')  #move at 50,000 pos/sec
+#    time.sleep(0.05)
+#    ptu_x.cmd('@01STOP\r')
+#    time.sleep(0.05)
+#    ptu_x.cmd('@01J-\r')
+#    time.sleep(0.05)
+#    for i in range(len(x)):
+#        time.sleep(0.05)
+#        ptu_x.cmd('@01SSPD'+str(x[i])+'\r')  #move at 50,000 pos/sec
