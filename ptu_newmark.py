@@ -64,7 +64,7 @@ class PTU:
         
      
                   
-if __name__ == '__main__':
+#if __name__ == '__main__':
     
     #Pan the PTU at max speed in one direction, stop, and pan in reverse direction
     #Create a ptu object, define com_port and baudrate
