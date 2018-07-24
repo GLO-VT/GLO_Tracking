@@ -32,8 +32,8 @@ class PID:
         if step_size == 'half':
             self.arcs_deg = 92.5714
         
-        self.pos2deg = self.arcs_deg/3600  #mulitply PTU steps by this to convert from PTU steps to degrees
-        self.deg2pos = 3600/23.1428  #multiply degrees by this to convert from degrees to PTU steps
+        self.pos2deg = 1.8/(72.*500)  #mulitply PTU steps by this to convert from PTU steps to degrees
+        self.deg2pos = 1./self.pos2deg  #multiply degrees by this to convert from degrees to PTU steps
 
         self.Initialize()
 

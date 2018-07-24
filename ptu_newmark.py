@@ -55,11 +55,12 @@ class PTU:
             print('Could not read command from PTU')
             return
         
-    def cmd(self,command):
+    def cmd(self,command,delay=0.005):
         '''
         Send command to PTU
         '''
         self.ptu.write(command.encode())
+        time.sleep(delay)
         return
         
      
