@@ -7,7 +7,7 @@ Created on Thu Jan 18 14:30:47 2018
 """
 from imu import IMU
 from pid import PID
-from ptu import PTU
+from ptu_newmark import PTU
 from ss import SS
 
 import time
@@ -111,7 +111,19 @@ class SS_tracking:
         self.max_vel_y = 1.0
         self.screen_res = screen_res
         self.read_dir = read_dir
-    
+        
+        self.ptu_cmd_x = np.nan
+        self.ptu_cmd_y = np.nan
+        
+        self.ptu_x_last_positive = True
+        self.ptu_y_last_positive = True
+
+        self.ptu_x_curr_positive = True
+        self.ptu_y_curr_positive = True
+        
+        self.ptu.cmd('@01STOP\r')
+        self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+        self.ptu.cmd('@01J-\r')
         #Initialized dataframe to store data  
         self.data = pd.DataFrame(columns=['ang_x_track',
                                           'ang_y_track',
@@ -428,17 +440,18 @@ class SS_tracking:
                     if self.ptu_cmd_x < 0:
                         self.ptu_x_curr_positive = True
                     else:
-                        self.ptu_x_curr_positive = False 
+                        self.ptu_x_curr_positive = False   
                     if self.track_x:
-                        if (self.ptu_x_last_positve == False) && (self.ptu_x_curr_positve == True):
-                            self.ptu.cmd('@01STOP'+str(self.ptu_cmd_x)+' ')
-                            self.ptu.cmd('@01SSPD15'+str(self.ptu_cmd_x)+' ')  #slow down before switching directions
-                            self.ptu.cmd('@01J+'+str(self.ptu_cmd_x)+' ')
-                        if (self.ptu_x_last_positve == True) && (self.ptu_x_curr_positve == False):
-                            self.ptu.cmd('@01STOP'+str(self.ptu_cmd_x)+' ')
-                            self.ptu.cmd('@01SSPD15'+str(self.ptu_cmd_x)+' ')  #slow down before switching directions
-                            self.ptu.cmd('@01J-'+str(self.ptu_cmd_x)+' ')
-                        self.ptu.cmd('@01SSPD'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
+                        if (self.ptu_x_last_positive == False) and (self.ptu_x_curr_positive == True):
+                            self.ptu.cmd('@01STOP\r')
+                            self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+                            self.ptu.cmd('@01J+\r')
+                        if (self.ptu_x_last_positive == True) and (self.ptu_x_curr_positive == False):
+                            self.ptu.cmd('@01STOP\r')
+                            self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+                            self.ptu.cmd('@01J-\r')
+                        self.ptu.cmd('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')    #Send PTU command to pan axis
+                        print('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')    #Send PTU command to pan axis
                         time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
                     if self.track_y:
                         self.ptu.cmd('to'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
@@ -458,16 +471,16 @@ class SS_tracking:
                     else:
                         self.ptu_x_curr_positive = False 
                     #Figure out if switching neg->pos or pos->neg
-                    if (self.ptu_x_last_positve == False) && (self.ptu_x_curr_positve == True):
-                        self.ptu.cmd('@01STOP'+str(self.ptu_cmd_x)+' ')
-                        self.ptu.cmd('@01SSPD15'+str(self.ptu_cmd_x)+' ')  #slow down before switching directions
-                        self.ptu.cmd('@01J+'+str(self.ptu_cmd_x)+' ')
-                    if (self.ptu_x_last_positve == True) && (self.ptu_x_curr_positve == False):
-                        self.ptu.cmd('@01STOP'+str(self.ptu_cmd_x)+' ')
-                        self.ptu.cmd('@01SSPD15'+str(self.ptu_cmd_x)+' ')  #slow down before switching directions
-                        self.ptu.cmd('@01J-'+str(self.ptu_cmd_x)+' ')
-                    self.ptu.cmd('@01SSPD'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
-                    print('@01SSPD'+str(self.ptu_cmd_x)+' ')
+                    if (self.ptu_x_last_positive == False) and (self.ptu_x_curr_positive == True):
+                        self.ptu.cmd('@01STOP\r')
+                        self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+                        self.ptu.cmd('@01J+\r')
+                    if (self.ptu_x_last_positive == True) and (self.ptu_x_curr_positive == False):
+                        self.ptu.cmd('@01STOP\r')
+                        self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+                        self.ptu.cmd('@01J-\r')
+                    self.ptu.cmd('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')    #Send PTU command to pan axis
+                    print('@01SSPD'+str(np.abs(self.ptu_cmd_x))+' ')
                     time.sleep(self.ptu_cmd_delay)    #allow small delay between PTU commands
                 if self.track_y:
                     self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
@@ -478,41 +491,46 @@ class SS_tracking:
 #                    print('ptu command failed tracking mode 2')
                     
             if self.track_mode == 3:   #PTU velocity-command mode: -imu velocity - derivative of ss_offset + PID control of ss position
-                try:
-                    self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
-                    try:
-                        self.ss_vel_x = (self.ss_filt_x[-1] - self.ss_filt_x[-3])/(2*(self.dt))  #Calculate ss x position derivative (central diff) from filtered ss data
-                        self.ss_vel_y = (self.ss_filt_y[-1] - self.ss_filt_y[-3])/(2*(self.dt))  #Calculate ss y position derivative (central diff) from filtered ss data
-                    except:
-                        if self.filter_win < 3:
-                            print('Filter window size needs to be >= 3 for tracking mode 3 (need three points to calculate derivative accurately)')
-                        print('Cannot calculate SS velocity')
-                        
-                    self.ptu_cmd_x = -self.imu_filt_x[-1] - self.ss_vel_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
-                    self.ptu_cmd_y = -self.imu_filt_y[-1] - self.ss_vel_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
-                    if self.track_x:
-                        #Determine direction of current velocity command
-                        if self.ptu_cmd_x < 0:
-                            self.ptu_x_curr_positive = True
-                        else:
-                            self.ptu_x_curr_positive = False 
-                        #Figure out if switching neg->pos or pos->neg
-                        if (self.ptu_x_last_positve == False) && (self.ptu_x_curr_positve == True):
-                            self.ptu.cmd('@01STOP'+str(self.ptu_cmd_x)+' ')
-                            self.ptu.cmd('@01SSPD15'+str(self.ptu_cmd_x)+' ')  #slow down before switching directions
-                            self.ptu.cmd('@01J+'+str(self.ptu_cmd_x)+' ')
-                        if (self.ptu_x_last_positve == True) && (self.ptu_x_curr_positve == False):
-                            self.ptu.cmd('@01STOP'+str(self.ptu_cmd_x)+' ')
-                            self.ptu.cmd('@01SSPD15'+str(self.ptu_cmd_x)+' ')  #slow down before switching directions
-                            self.ptu.cmd('@01J-'+str(self.ptu_cmd_x)+' ')
-                        self.ptu.cmd('@01SSPD'+str(self.ptu_cmd_x)+' ')    #Send PTU command to pan axis
-                        print('@01SSPD'+str(self.ptu_cmd_x)+' ')                    if self.track_y:
+#                try:
+                self.pid_pos(self.ang_x_track,self.ang_y_track)   #Generate PID offset control outputs
+#                    try:
+#                        self.ss_vel_x = (self.ss_filt_x[-1] - self.ss_filt_x[-3])/(2*(self.dt))  #Calculate ss x position derivative (central diff) from filtered ss data
+#                        self.ss_vel_y = (self.ss_filt_y[-1] - self.ss_filt_y[-3])/(2*(self.dt))  #Calculate ss y position derivative (central diff) from filtered ss data
+#                    except:
+#                        if self.filter_win < 3:
+#                            print('Filter window size needs to be >= 3 for tracking mode 3 (need three points to calculate derivative accurately)')
+#                        print('Cannot calculate SS velocity')
+                    
+#                self.ptu_cmd_x = -self.imu_filt_x + self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
+#                self.ptu_cmd_y = -self.imu_filt_y + self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
+                self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #PTU velocity x = -imu_ang_z + PID control output
+                self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #PTU velocity y = -imu_ang_y + PID control output
+                if self.track_x:
+                    #Determine direction of current velocity command
+                    if self.ptu_cmd_x < 0:
+                        self.ptu_x_curr_positive = True
+                    else:
+                        self.ptu_x_curr_positive = False 
+                    #Figure out if switching neg->pos or pos->neg
+                    if (self.ptu_x_last_positive == False) and (self.ptu_x_curr_positive == True):
+                        print('here')
+                        self.ptu.cmd('@01STOP\r')
+                        self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+                        self.ptu.cmd('@01J+\r')
+                    if (self.ptu_x_last_positive == True) and (self.ptu_x_curr_positive == False):
+                        print('here too')
+                        self.ptu.cmd('@01STOP\r')
+                        self.ptu.cmd('@01SSPD15\r')  #slow down before switching directions
+                        self.ptu.cmd('@01J-\r')
+                    self.ptu.cmd('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')    #Send PTU command to pan axis   #Send PTU command to pan axis
+                    print('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')    
+                    print('last_spd=',self.ptu_x_last_positive,'curr_spd=',self.ptu_x_curr_positive)
                     if self.track_y:
                         self.ptu.cmd('ts'+str(self.ptu_cmd_y)+' ')    #Send PTU command to pan axis
                         print('ts'+str(self.ptu_cmd_y)+' ')
-                except:
-                    self.ptu_cmd_x = np.nan
-                    self.ptu_cmd_y = np.nan
+#                except:
+#                    self.ptu_cmd_x = np.nan
+#                    self.ptu_cmd_y = np.nan
                            
             #Record time elapsed from start of tracking loop
             self.elapsed = time.time() - self.t_start
@@ -596,12 +614,12 @@ if __name__ == '__main__':
                         help='Tracking in y-axis')
     
     parser.add_argument('-tm','--track_mode',
-                        default=2,
+                        default=3,
                         type=int,
                         help='Tracking mode')
     
     parser.add_argument('-fm','--filter_mode',
-                        default=2,
+                        default=1,
                         type=int,
                         help='Filter mode')
     
@@ -621,7 +639,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=240,
+                        default=15,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -647,7 +665,7 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=12.53,
+                        default=-.1,
                         type=float,
                         help='Proportional gain x-axis')
     
@@ -662,7 +680,7 @@ if __name__ == '__main__':
                         help='Derivative gain x-axis')
     
     parser.add_argument('-kdy','--kdy',
-                        default=-0.5,
+                        default=-0.0,
                         type=float,
                         help='Derivative gain y-axis')
     
@@ -927,14 +945,14 @@ if __name__ == '__main__':
 #              baudrate=params.ptu_baud_rate,
 #              cmd_delay=params.ptu_cmd_delay)
     #Set latitude, longitude and altitude to Blacksburg, VA for sun pointing
-    ptu.lat, ptu.lon, ptu.alt = params.ptu_lat,params.ptu_lon,params.ptu_alt  #'37.205144','-80.417560', 634
-    ptu.utc_off=params.ptu_utc_off #4   #Set UTC time offset of EST
+#    ptu.lat, ptu.lon, ptu.alt = params.ptu_lat,params.ptu_lon,params.ptu_alt  #'37.205144','-80.417560', 634
+#    ptu.utc_off=params.ptu_utc_off #4   #Set UTC time offset of EST
 
     #Find the Sun and the moon from your location
 #    lat,lon,alt='37.205144','-80.417560',634    #Blacksburg
 #    utc_datetime = datetime.now()   #Use current time (can also set to custom datetime= '2018/5/7 16:04:56')
-    ptu.ephem_point(ep,imu=imu,target='sun',init=False,ptu_cmd=False)
-    ptu.ephem_point(ep,imu=imu,target='moon',init=False,ptu_cmd=False)
+#    ptu.ephem_point(ep,imu=imu,target='sun',init=False,ptu_cmd=False)
+#    ptu.ephem_point(ep,imu=imu,target='moon',init=False,ptu_cmd=False)
     
 #    #Microstep mode positions/degree ~ 23.4, so check to make sure PTU is in microstep mode, if not then set it
 #    if (ptu.pan_pdeg > 24) | (ptu.tilt_pdeg > 24):
@@ -1016,7 +1034,7 @@ if __name__ == '__main__':
 #        y3=df['ss2_x_raw']
         y4=df['ang_x_track']
 #        y5=df['ss2_x_raw']
-        y6=df['ptu_cmd_x']*23/3600.
+        y6=df['ptu_cmd_x']
         
         plt.figure(1)
         plt.plot(x,y1,'o-',label='imu_ang_z')
@@ -1029,7 +1047,7 @@ if __name__ == '__main__':
        # plt.plot(x,y2,'o-',label='imu_filt_x')
         plt.plot(x,y4,'o-',label='ss2_ang_x_raw')
        # plt.plot(x,y4,'o-',label='filtered ss')
-       # plt.plot(x,y6,'o-',label='ptu cmd x')
+        plt.plot(x,y6,'o-',label='ptu cmd x')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
         #plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
