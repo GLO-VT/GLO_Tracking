@@ -57,22 +57,23 @@ class PTU:
             print('Could not read command from PTU')
             return
         
-    def cmd(self,command,delay=0.005):
+    def cmd(self,command,delay=0.050):
         '''
         Send command to PTU
         '''
-        self.ptu.write(command.encode())
         time.sleep(delay)
+        self.ptu.write(command.encode())
+        
         return
         
      
                   
-if __name__ == '__main__':
-    
-    #Pan the PTU at max speed in one direction, stop, and pan in reverse direction
-    #Create a ptu object, define com_port and baudrate
-    ptu_x = PTU(com_port='COM9',baudrate=9600)
-    ptu_x.read('@01PX\r')
+#if __name__ == '__main__':
+#    
+#    #Pan the PTU at max speed in one direction, stop, and pan in reverse direction
+#    #Create a ptu object, define com_port and baudrate
+#    ptu_x = PTU(com_port='COM9',baudrate=9600)
+#    ptu_x.read('@01PX\r')
 ##    ptu_x.cmd('@01J+\r')  #Set to positive velocity mode
 ##    time.sleep(0.1)
 ##    ptu_x.cmd('@01SSPD80000\r')  #move at 50,000 pos/sec
