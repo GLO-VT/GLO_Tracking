@@ -40,7 +40,7 @@ class PTU:
             self.cmd('i ')    #Send this command to PTU to make it respond to commands
             print('Connected to PTU D300 Ebay (or not)')
      
-    def read(self,command,delay=0.5):
+    def read(self,command,delay=0.010):
         '''
         Send ptu a command, and return the ptu response
         '''
@@ -48,8 +48,10 @@ class PTU:
             self.ptu.write(command.encode())
             time.sleep(delay)
             bytesToRead = self.ptu.inWaiting()
+            time.sleep(delay)
             ptu_out = self.ptu.read(bytesToRead)
-            ptu_out = str(ptu_out).split(command)[1].split('\\r')[0]
+            #print(ptu_out)
+            ptu_out = ptu_out.decode().split('\r')[0]
             return ptu_out
         except:
             print('Could not read command from PTU')
@@ -65,11 +67,12 @@ class PTU:
         
      
                   
-#if __name__ == '__main__':
+if __name__ == '__main__':
     
     #Pan the PTU at max speed in one direction, stop, and pan in reverse direction
     #Create a ptu object, define com_port and baudrate
-#    ptu_x = PTU(com_port='COM9',baudrate=9600)
+    ptu_x = PTU(com_port='COM9',baudrate=9600)
+    ptu_x.read('@01PX\r')
 ##    ptu_x.cmd('@01J+\r')  #Set to positive velocity mode
 ##    time.sleep(0.1)
 ##    ptu_x.cmd('@01SSPD80000\r')  #move at 50,000 pos/sec
