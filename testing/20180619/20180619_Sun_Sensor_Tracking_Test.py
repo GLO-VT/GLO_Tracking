@@ -27,7 +27,7 @@ mpl.rcParams['axes.labelsize']=base_size
 mpl.rcParams['lines.markersize'] = 4           # markersize, in points
 mpl.rcParams['legend.markerscale'] = 1     # line width in points
 mpl.rcParams['lines.markeredgewidth'] = 0.2 # the line width around the marker symbol
-mpl.rcParams['lines.linewidth'] = 1.5
+mpl.rcParams['lines.linewidth'] = 3.0
 #####################################
 
 #Function to organize tracking data
@@ -60,6 +60,8 @@ def grab_data(data_loc,params_loc):
                         data[ss][key]['imu_ang_z']=data[ss][key]['imu_ang_z']*180.0/np.pi
                         #Smooth out angular rate and take gradient to calculate yaw accelerations in deg/sec^2
                         data[ss][key]['accel']=np.gradient(data[ss][key]['imu_ang_z'].rolling(30,center=True).mean(),data[ss][key]['elapsed'])
+                        data[ss][key]['velocity']=np.gradient(data[ss][key]['ang_x_track'].rolling(30,center=True).mean(),data[ss][key]['elapsed'])
+                        data[ss][key]['accel2']=np.gradient(data[ss][key]['velocity'].rolling(30,center=True).mean(),data[ss][key]['elapsed'])
                     except:
                         #print('No IMU data for ',ss,file_locs[i],i)
                         pass
@@ -266,7 +268,6 @@ plt.ylabel('Degrees')
 plt.title('Run'+str(run)+' acceleration vs. x-offset')
 plt.ylim((-0.4,0.4))
 
-<<<<<<< HEAD
 for i in range(data_all_ss1['run'].max()):
     mask = data_all_ss1['run'] == i+1
     print('run',i+1,'kpx=',data_all_ss1.loc[mask,'kpx'][0])
@@ -379,8 +380,6 @@ for i in range(17):
                '\n'+str(percentile*100)+'% percentile='+p+' deg')
 
 
-=======
->>>>>>> 348caa4658002221d9e91c5600f063073ce6499d
 #for ss in ['ss1','ss2','ss3']:
 #    for key in data[ss].keys():
 #        ss_num = int(ss[-1]) - 1
