@@ -20,7 +20,7 @@ cwd=os.getcwd()
 
 ptu = PTU(com_port='COM9',baudrate=9600)
 time.sleep(2)
-imu = IMU(com_port='COM5',baudrate=115200)
+imu = IMU(com_port='COM5',baudrate=921600)
 time.sleep(0.3)
 #imu.change_baudrate(921600)
 #imu.imu.disconnect()
@@ -52,7 +52,7 @@ for run in test_vel:
 #        print('test22')
         imu_ang_z[i] = imu.grab_ang_r().z #this is the line failing 
 #        print('test33')
-        time.sleep(0.009)
+        time.sleep(0.005)
     t1=time.time()
     ptu.cmd('@01STOP\r')
     hz = N/(t1-t0)
@@ -77,7 +77,6 @@ plt.title('IMU data: sampling rate='+str(hz)+'hz\n sampling time='+str(round(t1-
 plt.legend()
 #change baudrate back to default
 #imu.change_baudrate(115200)   
-
 
 
 
