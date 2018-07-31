@@ -10,7 +10,7 @@ Multiple runs are saved sending a step re
 
 """
 from imu import IMU
-from ptu import PTU
+from ptu_newmark import PTU
 import numpy as np
 import time
 import pandas as pd
@@ -18,13 +18,9 @@ import matplotlib.pyplot as plt
 import os
 cwd=os.getcwd()
 
-ptu = PTU(com_port='COM5',baudrate=9600)
+ptu = PTU(com_port='COM9',baudrate=9600)
 time.sleep(2)
-ptu.cmd('cv ')
-time.sleep(0.5)
-ptu.cmd('i ')
-time.sleep(1)
-imu = IMU(com_port='COM7',baudrate=921600)
+imu = IMU(com_port='COM5',baudrate=115200)
 time.sleep(0.3)
 #imu.change_baudrate(921600)
 #imu.imu.disconnect()
@@ -37,32 +33,36 @@ data={}
 data['date']='20180710'
 data['samples']=N
 cnt=0
-test_vel = [1,10,50,100,200,400]
+test_vel = [15,100,500,2500,15000,80000]
 
-for run in test_vel: 
+for run in test_vel:
     data[str(run)] = pd.DataFrame(columns=['imu_ang_z','elapsed'])
     t0=time.time()
     ptu_on=False
     imu_ang_z = np.zeros(N)
+
     for i in range(N):
         if ptu_on==False:
-            if time.time() - t0 > 2:
+#            print(time.time()-t0)
+            if time.time() - t0 > 2:    
                 ptu_on=True
-                ptu.cmd('ps'+str(test_vel[cnt])+' ')
-                print('ps'+str(test_vel[cnt])+' ')
-        imu_ang_z[i] = imu.grab_ang_r().z
+                ptu.cmd('@01SSPD'+str(test_vel[cnt])+'\r')
+                print('@01SSPD'+str(test_vel[cnt])+'\r')
+                ptu.cmd('@01J+\r')
+#        print('test22')
+        imu_ang_z[i] = imu.grab_ang_r().z #this is the line failing 
+#        print('test33')
         time.sleep(0.009)
     t1=time.time()
-    ptu.cmd('ps0 ')
+    ptu.cmd('@01STOP\r')
     hz = N/(t1-t0)
     data[str(run)]['elapsed']=np.linspace(0,t1-t0,len(imu_ang_z))
     data[str(run)]['imu_ang_z']=imu_ang_z
     cnt+=1
     time.sleep(2)
-    
-ptu.cmd('ci ')
+    print(cnt)
+
 time.sleep(0.5)
-ptu.cmd('pp0 ')
 
 plt.figure()
 for run in test_vel:
