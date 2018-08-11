@@ -111,8 +111,8 @@ class SS_tracking:
         self.filt_win_size = len(self.filter_kern)
         
         #Initialized dataframe to store data  
-        self.data = pd.DataFrame(columns=['ang_x_filt',
-                                          'ang_y_filt',
+        self.data = pd.DataFrame(columns=['ss_filt_x',
+                                          'ss_filt_y',
                                           'ss1_x_raw',
                                           'ss1_y_raw',
                                           'ss2_x_raw',
@@ -245,8 +245,8 @@ class SS_tracking:
                      'imu_ang_x':self.data['imu_ang_x'].values,
                      'imu_ang_y':self.data['imu_ang_y'].values,
                      'imu_ang_z':self.data['imu_ang_z'].values,
-                     'ang_x_filt':self.data['ang_x_filt'].values,
-                     'ang_y_filt':self.data['ang_y_filt'].values,
+                     'ss_filt_x':self.data['ss_filt_x'].values,
+                     'ss_filt_y':self.data['ss_filt_y'].values,
                      'ptu_cmd_x':self.data['ptu_cmd_x'].values,
                      'ptu_cmd_y':self.data['ptu_cmd_y'].values,
                      'ptu_pos_x':self.data['ptu_pos_x'].values,
@@ -365,6 +365,9 @@ class SS_tracking:
                 self.imu_filt_x = np.nan
                 self.imu_filt_y = np.nan
             
+            if len(self.filter_kern) <= 1:
+                self.ss_filt_x = self.ang_x_mean
+                self.ss_filt_y = self.ang_y_mean
             if len(self.filter_kern) > 1:  #if filter window size = 1, then do no filtering
                 if self.cnt > len(self.filter_kern):  #wait until enough samples are available to filter
                     #initialize sun sensor filtered x/y by muliplying the current 
@@ -374,17 +377,19 @@ class SS_tracking:
                     #loop through the rest of the filter kernel and multiply the 
                     #weights by the appropriate indices of the past x/y ss offsets
                     for i in np.arange(-1,-self.filt_win_size,-1):
-                        self.ss_filt_x += self.filter_kern[i-1]*self.data['ang_x_filt'][i]
-                        self.ss_filt_y += self.filter_kern[i-1]*self.data['ang_y_filt'][i]
-                
+                        self.ss_filt_x += self.filter_kern[i-1]*self.data['ss_filt_x'][i]
+                        self.ss_filt_y += self.filter_kern[i-1]*self.data['ss_filt_x'][i]
+                else:
+                    self.ss_filt_x = self.ang_x_mean
+                    self.ss_filt_y = self.ang_y_mean
                 try:
-                    self.pid_out_x = self.pid_x.GenOut(self.ang_filt_x)  #generate x-axis control output in "degrees"
+                    self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
                     if self.imu_filt_x != np.nan:
                         self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos - self.imu_filt_x  #convert to PTU positions
                     else:
                         self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #ignore IMU data if nan
                     
-                    self.pid_out_y = self.pid_y.GenOut(self.ang_filt_y)  #generate y-axis control output in "degrees"
+                    self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
                     self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos #convert to PTU positions (y-axis tracking ignores imu data)
                 except:
                     #print('PID output generation failed, cnt=',self.cnt)
@@ -393,158 +398,158 @@ class SS_tracking:
                     self.pid_out_y = np.nan
                     self.ptu_cmd_y = np.nan
                 
-                #Implement annoying 'switching direction' logic for newmark PTU x-axis
-                if self.track_x:
-                    if self.ptu_dir_x < 0:
-                        	if (-80000 <  self.ptu_cmd_x <  -15):
-                        		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
-                        	if self.ptu_cmd_x < -80000:
-                        		self.ptu_max(axis='x')
-                        	if (-15 <  self.ptu_cmd_x <  15):
-                        		self.ptu_stop(axis='x')
-                        	if self.ptu_cmd_x >= 15:
-                        		self.ptu_stop(axis='x')
-                        		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
-                        		self.ptu_jog_pos(axis='x')
-                    
-                    if self.ptu_dir_x > 0:
-                        	if self.ptu_cmd_x <= -15:
-                        		self.ptu_stop(axis='x')
-                        		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
-                        		self.ptu_jog_neg(axis='x')
-                        	if (-15 <  self.ptu_cmd_x <  15):
-                        		self.ptu_stop(axis='x')
-                        	if (15 <= self.ptu_cmd_x <= 80000):
-                        		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
-                        	if self.ptu_cmd_x > 80000:
-                        		self.ptu_max(axis='x')
-                        	
-                    if self.ptu_dir_x == 0:
-                        	if (-80000 <= self.ptu_cmd_x <= -15):
-                        		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
-                        		self.ptu_jog_neg(axis='x')
-                        	if (80000 >= self.ptu_cmd_x >= 15):
-                        		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
-                        		self.ptu_jog_pos(axis='x')
-                        	if (self.ptu_cmd_x < -80000):
-                        		self.ptu_max(axis='x')
-                        		self.ptu_jog_neg(axis='x')
-                        	if (self.ptu_cmd_x > 80000):
-                        		self.ptu_max(axis='x')
-                        		self.ptu_jog_pos(axis='x')
-                            
-                #Implement annoying 'switching direction' logic for newmark PTU y-axis      
-                if self.track_y:
-                    if self.ptu_dir_y < 0:
-                        	if (-80000 <  self.ptu_cmd_y <  -15):
-                        		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
-                        	if self.ptu_cmd_y < -80000:
-                        		self.ptu_max(axis='y')
-                        	if (-15 <  self.ptu_cmd_y <  15):
-                        		self.ptu_stop(axis='y')
-                        	if self.ptu_cmd_y >= 15:
-                        		self.ptu_stop(axis='y')
-                        		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
-                        		self.ptu_jog_pos(axis='y')
-                    
-                    if self.ptu_dir_y > 0:
-                        	if self.ptu_cmd_y <= -15:
-                        		self.ptu_stop(axis='y')
-                        		self.ptu_set_speed(-self.ptu_cmd_y,axis='y')
-                        		self.ptu_jog_neg(axis='y')
-                        	if (-15 <  self.ptu_cmd_y <  15):
-                        		self.ptu_stop(axis='y')
-                        	if (15 <= self.ptu_cmd_y <= 80000):
-                        		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
-                        	if self.ptu_cmd_y > 80000:
-                        		self.ptu_max(axis='y')
-                        	
-                    if self.ptu_dir_y == 0:
-                        	if (-80000 <= self.ptu_cmd_y <= -15):
-                        		self.ptu_set_speed(-self.ptu_cmd_y,axis='y')
-                        		self.ptu_jog_neg(axis='y')
-                        	if (80000 >= self.ptu_cmd_y >= 15):
-                        		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
-                        		self.ptu_jog_pos(axis='y')
-                        	if (self.ptu_cmd_y < -80000):
-                        		self.ptu_max(axis='y')
-                        		self.ptu_jog_neg(axis='y')
-                        	if (self.ptu_cmd_y > 80000):
-                        		self.ptu_max(axis='y')
-                        		self.ptu_jog_pos(axis='y')
-                           
+            #Implement annoying 'switching direction' logic for newmark PTU x-axis
+            if self.track_x:
+                if self.ptu_dir_x < 0:
+                    	if (-80000 <  self.ptu_cmd_x <  -15):
+                    		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
+                    	if self.ptu_cmd_x < -80000:
+                    		self.ptu_max_speed(axis='x')
+                    	if (-15 <  self.ptu_cmd_x <  15):
+                    		self.ptu_stop(axis='x')
+                    	if self.ptu_cmd_x >= 15:
+                    		self.ptu_stop(axis='x')
+                    		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
+                    		self.ptu_jog_pos(axis='x')
+                
+                if self.ptu_dir_x > 0:
+                    	if self.ptu_cmd_x <= -15:
+                    		self.ptu_stop(axis='x')
+                    		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
+                    		self.ptu_jog_neg(axis='x')
+                    	if (-15 <  self.ptu_cmd_x <  15):
+                    		self.ptu_stop(axis='x')
+                    	if (15 <= self.ptu_cmd_x <= 80000):
+                    		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
+                    	if self.ptu_cmd_x > 80000:
+                    		self.ptu_max_speed(axis='x')
+                    	
+                if self.ptu_dir_x == 0:
+                    	if (-80000 <= self.ptu_cmd_x <= -15):
+                    		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
+                    		self.ptu_jog_neg(axis='x')
+                    	if (80000 >= self.ptu_cmd_x >= 15):
+                    		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
+                    		self.ptu_jog_pos(axis='x')
+                    	if (self.ptu_cmd_x < -80000):
+                    		self.ptu_max_speed(axis='x')
+                    		self.ptu_jog_neg(axis='x')
+                    	if (self.ptu_cmd_x > 80000):
+                    		self.ptu_max_speed(axis='x')
+                    		self.ptu_jog_pos(axis='x')
+                        
+            #Implement annoying 'switching direction' logic for newmark PTU y-axis      
+            if self.track_y:
+                if self.ptu_dir_y < 0:
+                    	if (-80000 <  self.ptu_cmd_y <  -15):
+                    		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
+                    	if self.ptu_cmd_y < -80000:
+                    		self.ptu_max_speed(axis='y')
+                    	if (-15 <  self.ptu_cmd_y <  15):
+                    		self.ptu_stop(axis='y')
+                    	if self.ptu_cmd_y >= 15:
+                    		self.ptu_stop(axis='y')
+                    		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
+                    		self.ptu_jog_pos(axis='y')
+                
+                if self.ptu_dir_y > 0:
+                    	if self.ptu_cmd_y <= -15:
+                    		self.ptu_stop(axis='y')
+                    		self.ptu_set_speed(-self.ptu_cmd_y,axis='y')
+                    		self.ptu_jog_neg(axis='y')
+                    	if (-15 <  self.ptu_cmd_y <  15):
+                    		self.ptu_stop(axis='y')
+                    	if (15 <= self.ptu_cmd_y <= 80000):
+                    		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
+                    	if self.ptu_cmd_y > 80000:
+                    		self.ptu_max_speed(axis='y')
+                    	
+                if self.ptu_dir_y == 0:
+                    	if (-80000 <= self.ptu_cmd_y <= -15):
+                    		self.ptu_set_speed(-self.ptu_cmd_y,axis='y')
+                    		self.ptu_jog_neg(axis='y')
+                    	if (80000 >= self.ptu_cmd_y >= 15):
+                    		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
+                    		self.ptu_jog_pos(axis='y')
+                    	if (self.ptu_cmd_y < -80000):
+                    		self.ptu_max_speed(axis='y')
+                    		self.ptu_jog_neg(axis='y')
+                    	if (self.ptu_cmd_y > 80000):
+                    		self.ptu_max_speed(axis='y')
+                    		self.ptu_jog_pos(axis='y')
+               
             #Record time elapsed from start of tracking loop
             self.elapsed = time.time() - self.t_start
             self.d_time = datetime.now()
             if self.cnt > 1:
                 self.dt = self.elapsed - self.data['elapsed'][self.cnt-1]
             
-            try:
-                self.imu_accel=self.imu.grab_accel()
-                self.imu_ypr=self.imu.grab_ypr()
-                self.imu_mag=self.imu.grab_mag()
-                data_add = [self.ang_filt_x,
-                            self.ang_filt_y,
-                            ang_x[0],
-                            ang_y[0],
-                            ang_x[1],
-                            ang_y[1],
-                            ang_x[2],
-                            ang_y[2],
-                            self.ptu_cmd_x,
-                            self.ptu_cmd_y,
-                            self.ptu_pos_x,
-                            self.ptu_pos_y,
-                            self.ptu_dir_x,
-                            self.ptu_dir_y,
-                            self.imu_accel.x,
-                            self.imu_accel.y,
-                            self.imu_accel.z,
-                            self.imu_ang_r.x,
-                            self.imu_ang_r.y,
-                            self.imu_ang_r.z,
-                            self.imu_mag.x,
-                            self.imu_mag.y,
-                            self.imu_mag.z,
-                            self.imu_ypr.x,
-                            self.imu_ypr.y,
-                            self.imu_ypr.z, 
-                            self.imu_filt_x,
-                            self.imu_filt_y,
-                            self.elapsed,
-                            ]
-            except:
-                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
-                data_add = [np.nan,
-                            np.nan,
-                            ang_x[0],
-                            ang_y[0],
-                            ang_x[1],
-                            ang_y[1],
-                            ang_x[2],
-                            ang_y[2],
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan,
-                            np.nan, 
-                            self.imu_filt_x,
-                            self.imu_filt_y,
-                            self.elapsed,
-                            ]
+#            try:
+            self.imu_accel=self.imu.grab_accel()
+            self.imu_ypr=self.imu.grab_ypr()
+            self.imu_mag=self.imu.grab_mag()
+            data_add = [self.ss_filt_x,
+                        self.ss_filt_y,
+                        ang_x[0],
+                        ang_y[0],
+                        ang_x[1],
+                        ang_y[1],
+                        ang_x[2],
+                        ang_y[2],
+                        self.ptu_cmd_x,
+                        self.ptu_cmd_y,
+                        np.nan,  #self.ptu_pos_x  NEED to add
+                        np.nan,  #self.ptu_pos_y NEED to add
+                        self.ptu_dir_x,
+                        self.ptu_dir_y,
+                        self.imu_accel.x,
+                        self.imu_accel.y,
+                        self.imu_accel.z,
+                        self.imu_ang_r.x,
+                        self.imu_ang_r.y,
+                        self.imu_ang_r.z,
+                        self.imu_mag.x,
+                        self.imu_mag.y,
+                        self.imu_mag.z,
+                        self.imu_ypr.x,
+                        self.imu_ypr.y,
+                        self.imu_ypr.z, 
+                        self.imu_filt_x,
+                        self.imu_filt_y,
+                        self.elapsed,
+                        ]
+#            except:
+#                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
+#                data_add = [np.nan,
+#                            np.nan,
+#                            ang_x[0],
+#                            ang_y[0],
+#                            ang_x[1],
+#                            ang_y[1],
+#                            ang_x[2],
+#                            ang_y[2],
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan,
+#                            np.nan, 
+#                            self.imu_filt_x,
+#                            self.imu_filt_y,
+#                            self.elapsed,
+#                            ]
 
                 
             
@@ -617,7 +622,7 @@ if __name__ == '__main__':
                         help='Total time to track (seconds)')
     
     parser.add_argument('-hz','--hz',
-                        default=10,
+                        default=20,
                         type=float,
                         help='Tracking frequency (hz)')
     
@@ -638,7 +643,7 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=0.5,
+                        default=1.0,
                         type=float,
                         help='Proportional gain x-axis')
     
@@ -708,7 +713,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim x-axis')
     
     parser.add_argument('-ss2_ex','--ss2_eshim_x',
-                        default=0.0,
+                        default=-3.0,
                         type=float,
                         help='SS2 electronic shim x-axis')
     
@@ -779,7 +784,7 @@ if __name__ == '__main__':
     
 ###### IMU parameters ###########
     parser.add_argument('-imu_c','--imu_com_port',
-                        default='COM5',
+                        default='COM7',
                         type=str,
                         help='IMU comm port')    
     
@@ -855,7 +860,7 @@ if __name__ == '__main__':
 #        print('Filter window size (use -fw=)\n'+
 #              'ie, -fw=4 will use a filter window size of 4')
 #        sys.exit()
-        
+  
     #Define Modes  
     track_mode = params.track_mode  #default: 4 = no tracking
     ptu_offset_mode = params.ptu_offset_mode  #default: 0 no PTU offset prior to tracking
@@ -954,7 +959,7 @@ if __name__ == '__main__':
                              track_y=params.track_y,
                              )
         
-    print('Tracking with sun sensors',ss_track,'for',track_time,'seconds')
+    print('Tracking with sun sensors',ss_track,'for',params.track_time,'seconds')
     
     #Begin PTU tracking
     ss_tracking.run()
@@ -997,7 +1002,7 @@ if __name__ == '__main__':
         y1=df['imu_ang_z']*180./np.pi
         y2=df['imu_filt_x']*180./np.pi
 #        y3=df['ss2_x_raw']
-        y4=df['ang_x_track']
+        y4=df['ss_filt_x']
 #        y5=df['ss2_x_raw']
         y6=df['ptu_cmd_x']
         
