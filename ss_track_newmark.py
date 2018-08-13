@@ -115,10 +115,15 @@ class SS_tracking:
         self.ptu_cmd_y = 0.0
         self.ptu_dir_x = 0
         self.ptu_dir_y = 0
+        self.ptu_dir_x_new = 0
+        self.ptu_dir_y_new = 0
         self.ptu_vel_lo = 15  #Set minimum velocity of PTU to 15 steps/sec
         self.ptu_vel_hi = 80000 #Set maximum velocity of ptu to 80000 steps/sec
         self.ptu_sat = False #gets set to True if PTU is saturated (0>ptu_vel<15 or ptu_vel>80000)
         self.pid_integrate = True  #Set to False to ignore integral PID gain 
+        
+        self.t10=999
+        self.t11=999
         
         #Initialized dataframe to store data  
         self.data = pd.DataFrame(columns=['ss_mean_x',
@@ -150,34 +155,47 @@ class SS_tracking:
                                           'imu_ypr_y',
                                           'imu_ypr_z', 
                                           'imu_filt_x',
-                                          'elapsed'])
+                                          'elapsed',
+                                          't0',
+                                          't1',
+                                          't2',
+                                          't3',
+                                          't4',
+                                          't5',
+                                          't6',
+                                          't7',
+                                          't8',
+                                          't9',
+                                          't10',
+                                          't11'
+                                           ])
         
-    def setup_ptu(self):
-        '''
-        Set PTU to the appropriate control mode
-        Not currently used, need to change this logic from FLIR to Newmark logic
-        '''
-        try:
-            #Position mode
-            if self.track_mode == 1:
-                self.ptu_x.cmd('ci ')
-                time.sleep(0.1)
-                self.ptu_x.cmd('i ')
-                time.sleep(0.1)
-                self.ptu_x.cmd('ps1000 ')
-                time.sleep(0.1)
-                self.ptu_x.cmd('ts1000 ')
-            #Velocity Mode
-            if (self.track_mode == 2) | (self.track_mode == 3):
-                self.ptu_x.cmd('cv ')
-                time.sleep(0.1)
-                self.ptu_x.cmd('i ')
-                time.sleep(0.1)
-                self.ptu_x.cmd('ps0 ')
-                time.sleep(0.1)
-                self.ptu_x.cmd('ts0 ')
-        except:
-            sys.exit('Failed to set PTU control mode')
+#    def setup_ptu(self):
+#        '''
+#        Set PTU to the appropriate control mode
+#        Not currently used, need to change this logic from FLIR to Newmark logic
+#        '''
+#        try:
+#            #Position mode
+#            if self.track_mode == 1:
+#                self.ptu_x.cmd('ci ')
+#                time.sleep(0.1)
+#                self.ptu_x.cmd('i ')
+#                time.sleep(0.1)
+#                self.ptu_x.cmd('ps1000 ')
+#                time.sleep(0.1)
+#                self.ptu_x.cmd('ts1000 ')
+#            #Velocity Mode
+#            if (self.track_mode == 2) | (self.track_mode == 3):
+#                self.ptu_x.cmd('cv ')
+#                time.sleep(0.1)
+#                self.ptu_x.cmd('i ')
+#                time.sleep(0.1)
+#                self.ptu_x.cmd('ps0 ')
+#                time.sleep(0.1)
+#                self.ptu_x.cmd('ts0 ')
+#        except:
+#            sys.exit('Failed to set PTU control mode')
             
     def save_data(self):
         '''
@@ -248,35 +266,37 @@ class SS_tracking:
         df.to_csv(f_name, index=False) #add line 2 of header
         
         #Save data as matlab .mat file for simulation
-        print('Saving .mat file to ',cwd+'/run'+str(run_number)+'.mat')
-        sio.savemat(self.save_dir+dir_date+'ss_track_'+file_time+'_RUN'+str(run_number)+'.mat',
-                    {'elapsed':self.data['elapsed'].values,
-                     'imu_filt_x':self.data['imu_filt_x'].values,
-                     'imu_filt_y':self.data['imu_filt_y'].values,
-                     'imu_ang_x':self.data['imu_ang_x'].values,
-                     'imu_ang_y':self.data['imu_ang_y'].values,
-                     'imu_ang_z':self.data['imu_ang_z'].values,
-                     'ss_filt_x':self.data['ss_filt_x'].values,
-                     'ss_filt_y':self.data['ss_filt_y'].values,
-                     'ss_mean_x':self.data['ss_mean_x'].values,
-                     'ss_mean_y':self.data['ss_mean_y'].values,
-                     'ptu_cmd_x':self.data['ptu_cmd_x'].values,
-                     'ptu_cmd_y':self.data['ptu_cmd_y'].values,
-                     'ptu_pos_x':self.data['ptu_pos_x'].values,
-                     'ptu_pos_y':self.data['ptu_pos_y'].values,
-                     'ptu_dir_x':self.data['ptu_dir_x'].values,
-                     'ptu_dir_y':self.data['ptu_dir_y'].values,
-                     'kpx':self.pid_x.Kp,
-                     'kpy':self.pid_y.Kp,
-                     'kix':self.pid_x.Ki,
-                     'kiy':self.pid_y.Ki,
-                     'kdx':self.pid_x.Kd,
-                     'kdy':self.pid_y.Kd,
-                     'hz':self.hz,
-                     'track_mode':self.track_mode,
-                     'track_time':self.track_time,
-                     'ss_eshim_x':self.ss_eshim_x,
-                     'ss_eshim_y':self.ss_eshim_y})   
+        try:
+            print('Saving .mat file to ',cwd+'/run'+str(run_number)+'.mat')
+            sio.savemat(self.save_dir+dir_date+'ss_track_'+file_time+'_RUN'+str(run_number)+'.mat',
+                        {'elapsed':self.data['elapsed'].values,
+                         'imu_filt_x':self.data['imu_filt_x'].values,
+                         'imu_ang_x':self.data['imu_ang_x'].values,
+                         'imu_ang_y':self.data['imu_ang_y'].values,
+                         'imu_ang_z':self.data['imu_ang_z'].values,
+                         'ss_filt_x':self.data['ss_filt_x'].values,
+                         'ss_filt_y':self.data['ss_filt_y'].values,
+                         'ss_mean_x':self.data['ss_mean_x'].values,
+                         'ss_mean_y':self.data['ss_mean_y'].values,
+                         'ptu_cmd_x':self.data['ptu_cmd_x'].values,
+                         'ptu_cmd_y':self.data['ptu_cmd_y'].values,
+                         'ptu_pos_x':self.data['ptu_pos_x'].values,
+                         'ptu_pos_y':self.data['ptu_pos_y'].values,
+                         'ptu_dir_x':self.data['ptu_dir_x'].values,
+                         'ptu_dir_y':self.data['ptu_dir_y'].values,
+                         'kpx':self.pid_x.Kp,
+                         'kpy':self.pid_y.Kp,
+                         'kix':self.pid_x.Ki,
+                         'kiy':self.pid_y.Ki,
+                         'kdx':self.pid_x.Kd,
+                         'kdy':self.pid_y.Kd,
+                         'hz':self.hz,
+                         'track_mode':self.track_mode,
+                         'track_time':self.track_time,
+                         'ss_eshim_x':self.ss_eshim_x,
+                         'ss_eshim_y':self.ss_eshim_y})   
+        except:
+            print('Could not save .mat file')
     
     def ptu_stop(self,axis='x'):
         '''
@@ -284,11 +304,17 @@ class SS_tracking:
         Specify axis = 'x' or 'y' corresponding to 'pan' or 'tilt' axis
         '''
         if axis == 'x':
-            self.ptu_x.cmd('@01STOP\r',delay=self.ptu_cmd_delay)
-            self.ptu_dir_x=0
+            ptu_response = self.ptu_x.cmd('@01STOP\r',delay=self.ptu_cmd_delay)
+            if ptu_response == 'OK':
+                self.ptu_dir_x_new=0
+            else:
+                self.ptu_dir_x_new = self.ptu_dir_x
         if axis == 'y':
-            self.ptu_y.cmd('@01STOP\r',delay=self.ptu_cmd_delay)
-            self.ptu_dir_y=0
+            ptu_response = self.ptu_y.cmd('@01STOP\r',delay=self.ptu_cmd_delay)
+            if ptu_response == 'OK':
+                self.ptu_dir_y_new=0
+            else:
+                self.ptu_dir_y_new = self.ptu_dir_y
         
     def ptu_set_speed(self,ptu_speed,axis='x'):
         '''
@@ -296,7 +322,11 @@ class SS_tracking:
         Specify axis = 'x' or 'y' corresponding to 'pan' or 'tilt' axis
         '''
         if axis == 'x':
-            self.ptu_x.cmd('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')   #send x-axis ptu velocity command (absolute value of ptu_cmd
+            self.t10 = time.time()
+            command = '@01SSPD'+str(int(np.abs(ptu_speed)))+'\r'
+            self.ptu_x.cmd(command)   #send x-axis ptu velocity command (absolute value of ptu_cmd
+            #self.ptu_x.cmd('@01SSPD40000\r')
+            self.t11 = time.time()
         if axis == 'y':
             self.ptu_y.cmd('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')   #send y-axis ptu velocity command (absolute value of ptu_cmd
             
@@ -306,11 +336,18 @@ class SS_tracking:
         Specify axis = 'x' or 'y' corresponding to 'pan' or 'tilt' axis
         '''
         if axis == 'x':
-            self.ptu_x.cmd('@01J+\r')  #jog ptu in positive direction
-            self.ptu_dir_x=1
+            ptu_response = self.ptu_x.cmd('@01J+\r')  #jog ptu in positive direction
+            if ptu_response == 'OK':
+                print(self.cnt,'OK')
+                self.ptu_dir_x_new=1
+            else:
+                self.ptu_dir_x_new = self.ptu_dir_x
         if axis == 'y':
-            self.ptu_y.cmd('@01J+\r')  #jog ptu in positive direction
-            self.ptu_dir_y=1
+            ptu_response = self.ptu_y.cmd('@01J+\r')  #jog ptu in positive direction
+            if ptu_response == 'OK':
+                self.ptu_dir_y_new=1
+            else:
+                self.ptu_dir_y_new = self.ptu_dir_y
         
     def ptu_jog_neg(self,axis='x'):
         '''
@@ -318,11 +355,17 @@ class SS_tracking:
         Specify axis = 'x' or 'y' corresponding to 'pan' or 'tilt' axis
         '''
         if axis == 'x':
-            self.ptu_x.cmd('@01J-\r')  #jog ptu in negative direction
-            self.ptu_dir_x=-1
+            ptu_response = self.ptu_x.cmd('@01J-\r')  #jog ptu in negative direction
+            if ptu_response == 'OK':
+                self.ptu_dir_x_new=-1
+            else:
+                self.ptu_dir_x_new = self.ptu_dir_x
         if axis == 'y':
             self.ptu_y.cmd('@01J-\r')  #jog ptu in negative direction
-            self.ptu_dir_y=-1
+            if ptu_response == 'OK':
+                self.ptu_dir_y_new=-1
+            else:
+                self.ptu_dir_y_new = self.ptu_dir_y
         
     def ptu_max_speed(self,axis='x'):
         '''
@@ -334,6 +377,18 @@ class SS_tracking:
         if axis == 'y':
             self.ptu_y.cmd('@01SSPD80000\r')
 
+#    def sine_wave(self,mode=1):
+#        '''
+#        mode 1: slow speed test
+#        mode 2: fast speed test
+#        '''
+#        dt = time.time()-self.t_start
+#        amp = 4.0
+#        period = 3.0
+#        offset = amp*np.sin(dt*2*np.pi/period)
+#        return offset
+        
+    
     def run(self):
         '''
         Start tracking loop
@@ -350,8 +405,8 @@ class SS_tracking:
             self.t0 = time.time()
             
 ######################### Read Fine Sun Sensors ###############################
-            ang_x = np.zeros(len(self.ss_read),dtype=float)   
-            ang_y = np.zeros(len(self.ss_read),dtype=float)
+            ang_x = np.zeros(3,dtype=float)   
+            ang_y = np.zeros(3,dtype=float)
             ang_x.fill(np.nan)
             ang_y.fill(np.nan)
 
@@ -361,6 +416,11 @@ class SS_tracking:
                 if i in self.ss_track:   #Only include x and y SS offsets if included in ss_track
                     ang_x[i-1] = self.ss[i-1].ang_x_raw + self.ss_eshim_x[i-1]
                     ang_y[i-1] = self.ss[i-1].ang_y_raw + self.ss_eshim_y[i-1]
+                  
+                    #Uncomment the next three lines to test a sine wave 
+#                    offset = self.sine_wave()
+#                    ang_x[i-1] = self.ss[i-1].ang_x_raw + offset
+#                    ang_y[i-1] = self.ss[i-1].ang_y_raw + offset
 
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
@@ -402,7 +462,8 @@ class SS_tracking:
                     #Just use raw ss data (mean values) until enough samples have been collected (# of elements of filter_kern)
                     self.ss_filt_x = self.ss_mean_x
                     self.ss_filt_y = self.ss_mean_y
-            
+        
+            self.t1 = time.time()
 ######################## PID Controller #######################################
             #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
             try:
@@ -420,22 +481,24 @@ class SS_tracking:
                 self.ptu_cmd_x = np.nan
                 self.pid_out_y = np.nan
                 self.ptu_cmd_y = np.nan
-            
+            self.t2 = time.time()
 ##################### PTU Logic ###############################################
             #Implement 'switch direction' logic for newmark PTU x-axis
             if self.track_x:
-                if self.ptu_dir_x < 0:
+                self.t6 = time.time()
+                if (self.ptu_dir_x < 0):
                     	if (-self.ptu_vel_hi <  self.ptu_cmd_x <  -self.ptu_vel_lo):
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
                     	if self.ptu_cmd_x < -self.ptu_vel_hi:
                     		self.ptu_max_speed(axis='x')
                     	if (-self.ptu_vel_lo <  self.ptu_cmd_x <  self.ptu_vel_lo):
                     		self.ptu_stop(axis='x')
-                    	if self.ptu_cmd_x >= self.ptu_vel_lo:
+                    	if (self.ptu_cmd_x >= self.ptu_vel_lo):
                     		self.ptu_stop(axis='x')
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
                     		self.ptu_jog_pos(axis='x')
                 
+                self.t7 = time.time()
                 if self.ptu_dir_x > 0:
                     	if self.ptu_cmd_x <= -self.ptu_vel_lo:
                     		self.ptu_stop(axis='x')
@@ -447,7 +510,7 @@ class SS_tracking:
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
                     	if self.ptu_cmd_x > self.ptu_vel_hi:
                     		self.ptu_max_speed(axis='x')
-                    	
+                self.t8 = time.time()   	
                 if self.ptu_dir_x == 0:
                     	if (-self.ptu_vel_hi <= self.ptu_cmd_x <= -self.ptu_vel_lo):
                     		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
@@ -461,6 +524,8 @@ class SS_tracking:
                     	if (self.ptu_cmd_x > self.ptu_vel_hi):
                     		self.ptu_max_speed(axis='x')
                     		self.ptu_jog_pos(axis='x')
+                self.t9 = time.time()
+                self.ptu_dir_x = self.ptu_dir_x_new
                         
             #Implement 'switch direction' logic for newmark PTU y-axis      
             if self.track_y:
@@ -501,7 +566,10 @@ class SS_tracking:
                     	if (self.ptu_cmd_y > self.ptu_vel_hi):
                     		self.ptu_max_speed(axis='y')
                     		self.ptu_jog_pos(axis='y')
-
+                            
+                self.ptu_dir_y = self.ptu_dir_y_new
+                
+            self.t3 = time.time()
 #################### PID Anti-Windup Logic ####################################                           
             #Implement PID anti-windup logic - turn off integral gain if PTU is saturated
             #Determine if PTU is saturated
@@ -518,7 +586,8 @@ class SS_tracking:
             #Use PID integral gain if PTU is not saturated
             if ~self.ptu_sat:
                 self.pid_integrate = True
-
+                
+            self.t4 = time.time()
 ############################# Store Data ######################################               
             #Record time elapsed from start of tracking loop to store in dataframe
             self.elapsed = time.time() - self.t_start
@@ -531,6 +600,9 @@ class SS_tracking:
             self.imu_accel=self.imu.grab_accel()
             self.imu_ypr=self.imu.grab_ypr()
             self.imu_mag=self.imu.grab_mag()
+            
+            if self.cnt < 1:
+                self.t5=1.0
             #Create a list of all data to nicely add a row of data to the dataframe
             data_add = [self.ss_mean_x,
                         self.ss_mean_y,
@@ -562,6 +634,18 @@ class SS_tracking:
                         self.imu_ypr.z, 
                         self.imu_filt_x,
                         self.elapsed,
+                        self.t0,
+                        self.t1,
+                        self.t2,
+                        self.t3,
+                        self.t4,
+                        self.t5,
+                        self.t6,
+                        self.t7,
+                        self.t8,
+                        self.t9,
+                        self.t10,
+                        self.t11
                         ]
 #            except:
 #                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
@@ -607,7 +691,7 @@ class SS_tracking:
             if self.delay - t_diff > 0:
                 time.sleep(self.delay - t_diff)
                 print('sleeping for ',self.delay - t_diff)
-            
+            self.t5 = time.time()
             #Check to see if specified tracking time has expired
             if (time.time() - self.t_start) > self.track_time:
                 #Stop PTU from moving after tracking completes
@@ -662,7 +746,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=5,
+                        default=60,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -693,7 +777,7 @@ if __name__ == '__main__':
                         help='Proportional gain x-axis')
     
     parser.add_argument('-kpy','--kpy',
-                        default=-3.0,
+                        default=-0.0,
                         type=float,
                         help='Proportional gain y-axis')
     
@@ -758,7 +842,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim x-axis')
     
     parser.add_argument('-ss2_ex','--ss2_eshim_x',
-                        default=-3.0,
+                        default=-2.0,
                         type=float,
                         help='SS2 electronic shim x-axis')
     
@@ -861,7 +945,7 @@ if __name__ == '__main__':
                         help='IMU baud_rate')
     
     parser.add_argument('-ptu_d','--ptu_cmd_delay',
-                        default=0.01,
+                        default=0.00,
                         type=float,
                         help='PTU command delay')
     
@@ -979,12 +1063,16 @@ if __name__ == '__main__':
     
     #Establish communication with PTU
     try:
-        ptu_x = PTU(com_port=params.ptu_y_com_port,baudrate=9600)
+        ptu_x = PTU(com_port=params.ptu_x_com_port,
+                    baudrate=params.ptu_x_baud_rate,
+                    cmd_delay=params.ptu_cmd_delay)
     except:
         print('COULD NOT TALK TO PTU pan axis!!!')
         ptu_x=None
     try:
-        ptu_y = PTU(com_port=params.ptu_y_com_port,baudrate=9600)
+        ptu_y = PTU(com_port=params.ptu_y_com_port,
+                    baudrate=params.ptu_y_baud_rate,
+                    cmd_delay=params.ptu_cmd_delay)
     except:
         print('COULD NOT TALK TO PTU tilt axis!!!')
         ptu_y=None
@@ -1032,6 +1120,16 @@ if __name__ == '__main__':
     
     #Grab data in dataframe
     df = ss_tracking.data
+    
+    df['ss_time'] = df['t1']-df['t0']
+    df['pid_time'] = df['t2']-df['t1']
+    df['ptu_time'] = df['t3']-df['t2']
+    df['aw_time'] = df['t4']-df['t3']
+    df['data_time'] = df['t5']-df['t4']
+    df['move_neg'] = df['t7']-df['t6']
+    df['move_pos'] = df['t8']-df['t7']
+    df['stopeed'] = df['t9']-df['t8']
+    df['setspeed'] = df['t11']-df['t10']
         
     #Close IMU connection
     try:
@@ -1073,14 +1171,14 @@ if __name__ == '__main__':
         plt.plot(x,y1,'o-',label='imu_ang_z')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
-        plt.title('X-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
+        plt.title('X-Axis sensor data at '+str(params.hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
         plt.legend()
         
         #plt.figure(2)
        # plt.plot(x,y2,'o-',label='imu_filt_x')
-        plt.plot(x,y4,'o-',label='ss2_ang_x_raw')
+        plt.plot(x,y4,'o-',label='ss2_ss_filt_x')
        # plt.plot(x,y4,'o-',label='filtered ss')
-        plt.plot(x,y6,'o-',label='ptu cmd x')
+        plt.plot(x,y6,'o-',label='ptu_cmd_x')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
         plt.ylim((-3,3))
@@ -1088,7 +1186,7 @@ if __name__ == '__main__':
         plt.legend()
         
         plt.figure()
-        plt.title('X-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
+        plt.title('X-Axis sensor data at '+str(params.hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
         plt.plot(x,y4,'o-',label='ss2_ang_x_raw')
         plt.plot(x,y6,'o-',label='ptu cmd x')
         plt.legend()
