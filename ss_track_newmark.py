@@ -115,6 +115,10 @@ class SS_tracking:
         self.ptu_cmd_y = 0.0
         self.ptu_dir_x = 0
         self.ptu_dir_y = 0
+        self.ptu_vel_lo = 15  #Set minimum velocity of PTU to 15 steps/sec
+        self.ptu_vel_hi = 80000 #Set maximum velocity of ptu to 80000 steps/sec
+        self.ptu_sat = False #gets set to True if PTU is saturated (0>ptu_vel<15 or ptu_vel>80000)
+        self.pid_integrate = True  #Set to False to ignore integral PID gain 
         
         #Initialized dataframe to store data  
         self.data = pd.DataFrame(columns=['ss_mean_x',
@@ -146,7 +150,6 @@ class SS_tracking:
                                           'imu_ypr_y',
                                           'imu_ypr_z', 
                                           'imu_filt_x',
-                                          'imu_filt_y',
                                           'elapsed'])
         
     def setup_ptu(self):
@@ -315,10 +318,10 @@ class SS_tracking:
         Specify axis = 'x' or 'y' corresponding to 'pan' or 'tilt' axis
         '''
         if axis == 'x':
-            self.ptu_x.cmd('@01J-\r')  #jog ptu in positive direction
+            self.ptu_x.cmd('@01J-\r')  #jog ptu in negative direction
             self.ptu_dir_x=-1
         if axis == 'y':
-            self.ptu_y.cmd('@01J-\r')  #jog ptu in positive direction
+            self.ptu_y.cmd('@01J-\r')  #jog ptu in negative direction
             self.ptu_dir_y=-1
         
     def ptu_max_speed(self,axis='x'):
@@ -346,7 +349,7 @@ class SS_tracking:
             #Time reference to ensure tracking operates at approximately set sampling frequency
             self.t0 = time.time()
             
-            ########################## Read Fine Sun Sensors ##################
+######################### Read Fine Sun Sensors ###############################
             ang_x = np.zeros(len(self.ss_read),dtype=float)   
             ang_y = np.zeros(len(self.ss_read),dtype=float)
             ang_x.fill(np.nan)
@@ -359,7 +362,7 @@ class SS_tracking:
                     ang_x[i-1] = self.ss[i-1].ang_x_raw + self.ss_eshim_x[i-1]
                     ang_y[i-1] = self.ss[i-1].ang_y_raw + self.ss_eshim_y[i-1]
 
-             ########################## Take Mean of Fine Sun Sensors ##########           
+######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
 #            self.ss_mean_x = np.nanmean(ang_x)
 #            self.ss_mean_y = np.nanmean(ang_y)
@@ -376,13 +379,11 @@ class SS_tracking:
             try:
                 self.imu_ang_r = self.imu.grab_ang_r()
                 self.imu_filt_x = self.imu_ang_r.z
-                self.imu_filt_y = self.imu_ang_r.y
             except:
                 print('Could not grab IMU data, cnt=',self.cnt)
                 self.imu_filt_x = np.nan
-                self.imu_filt_y = np.nan
             
-            ########################## Filter SS data #########################
+######################### Filter SS data ###################################### 
             #Use filter kernel to filter ss_mean_x and ss_mean_y
             #initialize sun sensor filtered x/y by muliplying the current 
             #ss_mean_x and ss_mean_y by the last index in the filter kernel
@@ -402,7 +403,7 @@ class SS_tracking:
                     self.ss_filt_x = self.ss_mean_x
                     self.ss_filt_y = self.ss_mean_y
             
-            ########################## PID Controller #########################
+######################## PID Controller #######################################
             #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
             try:
                 self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
@@ -420,87 +421,105 @@ class SS_tracking:
                 self.pid_out_y = np.nan
                 self.ptu_cmd_y = np.nan
             
-            ########################## PTU Logic ##############################
-            #Implement annoying 'switching direction' logic for newmark PTU x-axis
+##################### PTU Logic ###############################################
+            #Implement 'switch direction' logic for newmark PTU x-axis
             if self.track_x:
                 if self.ptu_dir_x < 0:
-                    	if (-80000 <  self.ptu_cmd_x <  -15):
+                    	if (-self.ptu_vel_hi <  self.ptu_cmd_x <  -self.ptu_vel_lo):
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
-                    	if self.ptu_cmd_x < -80000:
+                    	if self.ptu_cmd_x < -self.ptu_vel_hi:
                     		self.ptu_max_speed(axis='x')
-                    	if (-15 <  self.ptu_cmd_x <  15):
+                    	if (-self.ptu_vel_lo <  self.ptu_cmd_x <  self.ptu_vel_lo):
                     		self.ptu_stop(axis='x')
-                    	if self.ptu_cmd_x >= 15:
+                    	if self.ptu_cmd_x >= self.ptu_vel_lo:
                     		self.ptu_stop(axis='x')
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
                     		self.ptu_jog_pos(axis='x')
                 
                 if self.ptu_dir_x > 0:
-                    	if self.ptu_cmd_x <= -15:
+                    	if self.ptu_cmd_x <= -self.ptu_vel_lo:
                     		self.ptu_stop(axis='x')
                     		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
                     		self.ptu_jog_neg(axis='x')
-                    	if (-15 <  self.ptu_cmd_x <  15):
+                    	if (-self.ptu_vel_lo <  self.ptu_cmd_x <  self.ptu_vel_lo):
                     		self.ptu_stop(axis='x')
-                    	if (15 <= self.ptu_cmd_x <= 80000):
+                    	if (self.ptu_vel_lo <= self.ptu_cmd_x <= self.ptu_vel_hi):
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
-                    	if self.ptu_cmd_x > 80000:
+                    	if self.ptu_cmd_x > self.ptu_vel_hi:
                     		self.ptu_max_speed(axis='x')
                     	
                 if self.ptu_dir_x == 0:
-                    	if (-80000 <= self.ptu_cmd_x <= -15):
+                    	if (-self.ptu_vel_hi <= self.ptu_cmd_x <= -self.ptu_vel_lo):
                     		self.ptu_set_speed(-self.ptu_cmd_x,axis='x')
                     		self.ptu_jog_neg(axis='x')
-                    	if (80000 >= self.ptu_cmd_x >= 15):
+                    	if (self.ptu_vel_hi >= self.ptu_cmd_x >= self.ptu_vel_lo):
                     		self.ptu_set_speed(self.ptu_cmd_x,axis='x')
                     		self.ptu_jog_pos(axis='x')
-                    	if (self.ptu_cmd_x < -80000):
+                    	if (self.ptu_cmd_x < -self.ptu_vel_hi):
                     		self.ptu_max_speed(axis='x')
                     		self.ptu_jog_neg(axis='x')
-                    	if (self.ptu_cmd_x > 80000):
+                    	if (self.ptu_cmd_x > self.ptu_vel_hi):
                     		self.ptu_max_speed(axis='x')
                     		self.ptu_jog_pos(axis='x')
                         
-            #Implement annoying 'switching direction' logic for newmark PTU y-axis      
+            #Implement 'switch direction' logic for newmark PTU y-axis      
             if self.track_y:
                 if self.ptu_dir_y < 0:
-                    	if (-80000 <  self.ptu_cmd_y <  -15):
+                    	if (-self.ptu_vel_hi <  self.ptu_cmd_y <  -self.ptu_vel_lo):
                     		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
-                    	if self.ptu_cmd_y < -80000:
+                    	if self.ptu_cmd_y < -self.ptu_vel_hi:
                     		self.ptu_max_speed(axis='y')
-                    	if (-15 <  self.ptu_cmd_y <  15):
+                    	if (-self.ptu_vel_lo <  self.ptu_cmd_y <  self.ptu_vel_lo):
                     		self.ptu_stop(axis='y')
-                    	if self.ptu_cmd_y >= 15:
+                    	if self.ptu_cmd_y >= self.ptu_vel_lo:
                     		self.ptu_stop(axis='y')
                     		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
                     		self.ptu_jog_pos(axis='y')
                 
                 if self.ptu_dir_y > 0:
-                    	if self.ptu_cmd_y <= -15:
+                    	if self.ptu_cmd_y <= -self.ptu_vel_lo:
                     		self.ptu_stop(axis='y')
                     		self.ptu_set_speed(-self.ptu_cmd_y,axis='y')
                     		self.ptu_jog_neg(axis='y')
-                    	if (-15 <  self.ptu_cmd_y <  15):
+                    	if (-self.ptu_vel_lo <  self.ptu_cmd_y <  self.ptu_vel_lo):
                     		self.ptu_stop(axis='y')
-                    	if (15 <= self.ptu_cmd_y <= 80000):
+                    	if (self.ptu_vel_lo <= self.ptu_cmd_y <= self.ptu_vel_hi):
                     		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
-                    	if self.ptu_cmd_y > 80000:
+                    	if self.ptu_cmd_y > self.ptu_vel_hi:
                     		self.ptu_max_speed(axis='y')
                     	
                 if self.ptu_dir_y == 0:
-                    	if (-80000 <= self.ptu_cmd_y <= -15):
+                    	if (-self.ptu_vel_hi <= self.ptu_cmd_y <= -self.ptu_vel_lo):
                     		self.ptu_set_speed(-self.ptu_cmd_y,axis='y')
                     		self.ptu_jog_neg(axis='y')
-                    	if (80000 >= self.ptu_cmd_y >= 15):
+                    	if (self.ptu_vel_hi >= self.ptu_cmd_y >= self.ptu_vel_lo):
                     		self.ptu_set_speed(self.ptu_cmd_y,axis='y')
                     		self.ptu_jog_pos(axis='y')
-                    	if (self.ptu_cmd_y < -80000):
+                    	if (self.ptu_cmd_y < -self.ptu_vel_hi):
                     		self.ptu_max_speed(axis='y')
                     		self.ptu_jog_neg(axis='y')
-                    	if (self.ptu_cmd_y > 80000):
+                    	if (self.ptu_cmd_y > self.ptu_vel_hi):
                     		self.ptu_max_speed(axis='y')
                     		self.ptu_jog_pos(axis='y')
-               
+
+#################### PID Anti-Windup Logic ####################################                           
+            #Implement PID anti-windup logic - turn off integral gain if PTU is saturated
+            #Determine if PTU is saturated
+            if np.abs(self.ptu_cmd_x) > self.ptu_vel_hi:
+            	self.ptu_sat = True
+            if np.abs(self.ptu_cmd_x) < self.ptu_vel_lo:
+            	self.ptu_sat = True
+            	
+            #If PTU is saturated, and offset is in same direction as PTU command, then disable PID integral gain    
+            if self.ptu_sat:
+            	if (self.ss_filt_x * self.ptu_cmd_x) > 0:
+                    self.pid_integrate = False
+            
+            #Use PID integral gain if PTU is not saturated
+            if ~self.ptu_sat:
+                self.pid_integrate = True
+
+############################# Store Data ######################################               
             #Record time elapsed from start of tracking loop to store in dataframe
             self.elapsed = time.time() - self.t_start
             self.d_time = datetime.now()
@@ -508,6 +527,7 @@ class SS_tracking:
                 self.dt = self.elapsed - self.data['elapsed'][self.cnt-1]
             
 #            try:
+            #Grab extra data from IMU
             self.imu_accel=self.imu.grab_accel()
             self.imu_ypr=self.imu.grab_ypr()
             self.imu_mag=self.imu.grab_mag()
@@ -541,7 +561,6 @@ class SS_tracking:
                         self.imu_ypr.y,
                         self.imu_ypr.z, 
                         self.imu_filt_x,
-                        self.imu_filt_y,
                         self.elapsed,
                         ]
 #            except:
@@ -573,7 +592,6 @@ class SS_tracking:
 #                            np.nan,
 #                            np.nan, 
 #                            self.imu_filt_x,
-#                            self.imu_filt_y,
 #                            self.elapsed,
 #                            ]
 
