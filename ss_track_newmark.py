@@ -122,6 +122,10 @@ class SS_tracking:
         self.ptu_sat = False #gets set to True if PTU is saturated (0>ptu_vel<15 or ptu_vel>80000)
         self.pid_integrate = True  #Set to False to ignore integral PID gain 
         
+        #Initialize PTU speed to 0
+        self.spd_last_x = 0.0
+        self.spd_last_y = 0.0
+        
         self.t10=999
         self.t11=999
         
@@ -467,20 +471,41 @@ class SS_tracking:
 ######################## PID Controller #######################################
             #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
             try:
-                self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
-                if self.imu_filt_x != np.nan:
-                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos - self.imu_filt_x  #convert to PTU positions
+                if (self.ss_filt_x > -5) & (self.ss_filt_x < 5):
+                    self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
+                    if self.track_mode == 3:
+                        self.ptu_cmd_x = self.spd_last_x + self.pid_out_x*self.pid_x.deg2pos  #convert to PTU positions
+                        self.spd_last_x = self.ptu_cmd_x
+                    if self.track_mode == 4:
+                        if self.imu_filt_x != np.nan:
+                            self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos - self.imu_filt_x  #convert to PTU positions
+                        else:
+                            self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #ignore IMU data if nan
+                    
                 else:
-                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #ignore IMU data if nan
-                
-                self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
-                self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos #convert to PTU positions (y-axis tracking ignores imu data)
+                    print('Sun sensor x-axis outside FOV, cnt=',self.cnt)
+                    self.pid_out_x = np.nan
+                    self.ptu_cmd_x = np.nan
+                    
+                if (self.ss_filt_y > -5) & (self.ss_filt_y < 5):
+                    self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
+                    if self.track_mode == 3:
+                        self.ptu_cmd_y = self.spd_last_y + self.pid_out_y*self.pid_y.deg2pos  #convert to PTU positions
+                        self.spd_last_y = self.ptu_cmd_y
+                    if self.track_mode == 4:
+                        self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #ignore IMU data if nan
+                else:
+                    print('Sun sensor y-axis outside FOV, cnt=',self.cnt)
+                    self.pid_out_y = np.nan
+                    self.ptu_cmd_y = np.nan  
+                                   
             except:
                 print('PID output generation failed, cnt=',self.cnt)
                 self.pid_out_x = np.nan
                 self.ptu_cmd_x = np.nan
                 self.pid_out_y = np.nan
                 self.ptu_cmd_y = np.nan
+            
             self.t2 = time.time()
 ##################### PTU Logic ###############################################
             #Implement 'switch direction' logic for newmark PTU x-axis
@@ -720,8 +745,8 @@ if __name__ == '__main__':
                         type=bool,
                         help='Tracking in y-axis')
     
-    parser.add_argument('-tm','--track_mode',
-                        default=3,
+    parser.add_argument('-tm','--track_mode',   # 3 = differential velocity mode (no IMU)
+                        default=3,              # 4 = IMU compensation
                         type=int,
                         help='Tracking mode')
     
