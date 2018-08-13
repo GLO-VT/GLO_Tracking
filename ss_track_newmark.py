@@ -60,7 +60,8 @@ class SS_tracking:
     '''
     def __init__(self,
                  ss,
-                 ptu,
+                 ptu_x,
+                 ptu_y,
                  imu,
                  ss_read=[1,2,3],
                  ss_track=[1,2,3],
@@ -81,7 +82,8 @@ class SS_tracking:
         
         #Initialize parameters
         self.ss = ss
-        self.ptu_x = ptu
+        self.ptu_x = ptu_x
+        self.ptu_y = ptu_y
         self.imu=imu
         self.ss_read = ss_read
         self.ss_track = ss_track
@@ -101,17 +103,23 @@ class SS_tracking:
         self.screen_res = screen_res
         
         #PtU initial paramaters
-        #self.ptu_x.cmd('@01STOP\r')   #Make sure PTU starts out stopped
+        try:
+            self.ptu_x.cmd('@01STOP\r')   #Make sure PTU starts out stopped
+        except:
+            print('Could not Stop PTU pan axis, CHECK THE CABLES!!!')
+        try:
+            self.ptu_y.cmd('@01STOP\r')   #Make sure PTU starts out stopped
+        except:
+            print('Could not Stop PTU tilt axis, CHECK THE CABLES!!!')
         self.ptu_cmd_x = 0.0
         self.ptu_cmd_y = 0.0
         self.ptu_dir_x = 0
         self.ptu_dir_y = 0
         
-        #Filtering parameters
-        self.filt_win_size = len(self.filter_kern)
-        
         #Initialized dataframe to store data  
-        self.data = pd.DataFrame(columns=['ss_filt_x',
+        self.data = pd.DataFrame(columns=['ss_mean_x',
+                                          'ss_mean_y',
+                                          'ss_filt_x',
                                           'ss_filt_y',
                                           'ss1_x_raw',
                                           'ss1_y_raw',
@@ -144,7 +152,7 @@ class SS_tracking:
     def setup_ptu(self):
         '''
         Set PTU to the appropriate control mode
-        Need to change this logic from FLIR to Newmark logic
+        Not currently used, need to change this logic from FLIR to Newmark logic
         '''
         try:
             #Position mode
@@ -247,6 +255,8 @@ class SS_tracking:
                      'imu_ang_z':self.data['imu_ang_z'].values,
                      'ss_filt_x':self.data['ss_filt_x'].values,
                      'ss_filt_y':self.data['ss_filt_y'].values,
+                     'ss_mean_x':self.data['ss_mean_x'].values,
+                     'ss_mean_y':self.data['ss_mean_y'].values,
                      'ptu_cmd_x':self.data['ptu_cmd_x'].values,
                      'ptu_cmd_y':self.data['ptu_cmd_y'].values,
                      'ptu_pos_x':self.data['ptu_pos_x'].values,
@@ -321,7 +331,6 @@ class SS_tracking:
         if axis == 'y':
             self.ptu_y.cmd('@01SSPD80000\r')
 
-    
     def run(self):
         '''
         Start tracking loop
@@ -337,21 +346,29 @@ class SS_tracking:
             #Time reference to ensure tracking operates at approximately set sampling frequency
             self.t0 = time.time()
             
-            ang_x = np.zeros(len(self.ss),dtype=float)   
-            ang_y = np.zeros(len(self.ss),dtype=float)
+            ########################## Read Fine Sun Sensors ##################
+            ang_x = np.zeros(len(self.ss_read),dtype=float)   
+            ang_y = np.zeros(len(self.ss_read),dtype=float)
             ang_x.fill(np.nan)
             ang_y.fill(np.nan)
 
             #Collect Sun Sensor data
-            for i in ss_read:    #Loop through all sun sensors
-                self.ss[i-1].read_data_all()    #Read all data from sun sensor using SS class      
+            for i in ss_read:    #Loop through all sun sensors in ss_read
+                self.ss[i-1].read_data_all()    #Read all data from sun sensor using SS class, correct for python 0-indexing 
                 if i in self.ss_track:   #Only include x and y SS offsets if included in ss_track
                     ang_x[i-1] = self.ss[i-1].ang_x_raw + self.ss_eshim_x[i-1]
                     ang_y[i-1] = self.ss[i-1].ang_y_raw + self.ss_eshim_y[i-1]
-        
-            #  currently this is just taking the mean of all sun sensors listed in ss_track
-            self.ang_x_mean = np.nanmean(ang_x)
-            self.ang_y_mean = np.nanmean(ang_y)
+
+             ########################## Take Mean of Fine Sun Sensors ##########           
+#            #Take arithmetic mean of all sun sensors listed in ss_track
+#            self.ss_mean_x = np.nanmean(ang_x)
+#            self.ss_mean_y = np.nanmean(ang_y)
+            
+            #Take geometric mean of all sun sensors listed in ss_track
+            num_x = np.count_nonzero(~np.isnan(ang_x)) #count number of non-nan elements in ang_x
+            num_y = np.count_nonzero(~np.isnan(ang_y)) #count number of non-nan elements in ang_y
+            self.ss_mean_x = np.nanprod(ang_x)**(1./num_x) #geometric mean
+            self.ss_mean_y = np.nanprod(ang_y)**(1./num_y) #geometric mean
             
             #Read current PTU position - need to implement, see genie_track_newmark.py
             
@@ -361,43 +378,49 @@ class SS_tracking:
                 self.imu_filt_x = self.imu_ang_r.z
                 self.imu_filt_y = self.imu_ang_r.y
             except:
-                #print('Could not grab IMU data, cnt=',self.cnt)
+                print('Could not grab IMU data, cnt=',self.cnt)
                 self.imu_filt_x = np.nan
                 self.imu_filt_y = np.nan
             
-            if len(self.filter_kern) <= 1:
-                self.ss_filt_x = self.ang_x_mean
-                self.ss_filt_y = self.ang_y_mean
+            ########################## Filter SS data #########################
+            #Use filter kernel to filter ss_mean_x and ss_mean_y
+            #initialize sun sensor filtered x/y by muliplying the current 
+            #ss_mean_x and ss_mean_y by the last index in the filter kernel
+            self.ss_filt_x = self.filter_kern[-1]*self.ss_mean_x
+            self.ss_filt_y = self.filter_kern[-1]*self.ss_mean_y
+            
+            #Now cycle through the rest of filter weights in filter_kern 
             if len(self.filter_kern) > 1:  #if filter window size = 1, then do no filtering
-                if self.cnt > len(self.filter_kern):  #wait until enough samples are available to filter
-                    #initialize sun sensor filtered x/y by muliplying the current 
-                    #ang_x_track or ang_y_track by the last index in the filter kernel
-                    self.ss_filt_x = self.filter_kern[-1]*self.ang_x_mean
-                    self.ss_filt_y = self.filter_kern[-1]*self.ang_y_mean
+                if self.cnt > len(self.filter_kern):  #wait until enough samples are available to filter  
                     #loop through the rest of the filter kernel and multiply the 
-                    #weights by the appropriate indices of the past x/y ss offsets
-                    for i in np.arange(-1,-self.filt_win_size,-1):
-                        self.ss_filt_x += self.filter_kern[i-1]*self.data['ss_filt_x'][i]
-                        self.ss_filt_y += self.filter_kern[i-1]*self.data['ss_filt_x'][i]
+                    #weights by the appropriate indices of the past ss_mean_x and ss_mean_y values
+                    for i in np.arange(-1,-len(self.filter_kern),-1):
+                        self.ss_filt_x += self.filter_kern[i-1]*self.data['ss_mean_x'][i]
+                        self.ss_filt_y += self.filter_kern[i-1]*self.data['ss_mean_x'][i]
                 else:
-                    self.ss_filt_x = self.ang_x_mean
-                    self.ss_filt_y = self.ang_y_mean
-                try:
-                    self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
-                    if self.imu_filt_x != np.nan:
-                        self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos - self.imu_filt_x  #convert to PTU positions
-                    else:
-                        self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #ignore IMU data if nan
-                    
-                    self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
-                    self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos #convert to PTU positions (y-axis tracking ignores imu data)
-                except:
-                    #print('PID output generation failed, cnt=',self.cnt)
-                    self.pid_out_x = np.nan
-                    self.ptu_cmd_x = np.nan
-                    self.pid_out_y = np.nan
-                    self.ptu_cmd_y = np.nan
+                    #Just use raw ss data (mean values) until enough samples have been collected (# of elements of filter_kern)
+                    self.ss_filt_x = self.ss_mean_x
+                    self.ss_filt_y = self.ss_mean_y
+            
+            ########################## PID Controller #########################
+            #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
+            try:
+                self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
+                if self.imu_filt_x != np.nan:
+                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos - self.imu_filt_x  #convert to PTU positions
+                else:
+                    self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos  #ignore IMU data if nan
                 
+                self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
+                self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos #convert to PTU positions (y-axis tracking ignores imu data)
+            except:
+                print('PID output generation failed, cnt=',self.cnt)
+                self.pid_out_x = np.nan
+                self.ptu_cmd_x = np.nan
+                self.pid_out_y = np.nan
+                self.ptu_cmd_y = np.nan
+            
+            ########################## PTU Logic ##############################
             #Implement annoying 'switching direction' logic for newmark PTU x-axis
             if self.track_x:
                 if self.ptu_dir_x < 0:
@@ -478,7 +501,7 @@ class SS_tracking:
                     		self.ptu_max_speed(axis='y')
                     		self.ptu_jog_pos(axis='y')
                
-            #Record time elapsed from start of tracking loop
+            #Record time elapsed from start of tracking loop to store in dataframe
             self.elapsed = time.time() - self.t_start
             self.d_time = datetime.now()
             if self.cnt > 1:
@@ -488,7 +511,10 @@ class SS_tracking:
             self.imu_accel=self.imu.grab_accel()
             self.imu_ypr=self.imu.grab_ypr()
             self.imu_mag=self.imu.grab_mag()
-            data_add = [self.ss_filt_x,
+            #Create a list of all data to nicely add a row of data to the dataframe
+            data_add = [self.ss_mean_x,
+                        self.ss_mean_y,
+                        self.ss_filt_x,
                         self.ss_filt_y,
                         ang_x[0],
                         ang_y[0],
@@ -552,18 +578,19 @@ class SS_tracking:
 #                            ]
 
                 
-            
+            #add row of data to dataframe
             self.data.loc[self.d_time] = data_add
             
+            #increment tracking loop counter
             self.cnt+=1
             
-            #Maintain desired data rate
+            #Maintain desired tracking loop frequency
             t_diff = time.time() - self.t0
             if self.delay - t_diff > 0:
                 time.sleep(self.delay - t_diff)
                 print('sleeping for ',self.delay - t_diff)
             
-            #Check to see if tracking time has expired
+            #Check to see if specified tracking time has expired
             if (time.time() - self.t_start) > self.track_time:
                 #Stop PTU from moving after tracking completes
                 try:
@@ -795,12 +822,22 @@ if __name__ == '__main__':
     
     
 ###### PTU parameters ###########
-    parser.add_argument('-ptu_c','--ptu_com_port',
+    parser.add_argument('-ptu_xc','--ptu_x_com_port',
                         default='COM9',
                         type=str,
                         help='IMU comm port')    
     
-    parser.add_argument('-ptu_b','--ptu_baud_rate',
+    parser.add_argument('-ptu_xb','--ptu_x_baud_rate',
+                        default=9600,
+                        type=int,
+                        help='IMU baud_rate')
+    
+    parser.add_argument('-ptu_yc','--ptu_y_com_port',
+                        default='COM10',
+                        type=str,
+                        help='IMU comm port')    
+    
+    parser.add_argument('-ptu_yb','--ptu_y_baud_rate',
                         default=9600,
                         type=int,
                         help='IMU baud_rate')
@@ -881,8 +918,9 @@ if __name__ == '__main__':
     print('Pan axis (x-axis) PID gains kpx=',params.kpx,'kix=',params.kix,'kdx=',params.kdx)
     print('Tilt axis (t-axis) PID gains kpy=',params.kpy,'kiy=',params.kiy,'kdy=',params.kdy)
 
+    #not used currently
     #Obtain ephemeris data
-    ep = ephem.Observer()
+#    ep = ephem.Observer()
 
     #Establish communication with sun sensor/s - store in a list
     ss=[SS(inst_id=params.ss1_inst_id,com_port=params.ss1_com_port,baudrate=params.ss1_baud_rate),
@@ -898,7 +936,7 @@ if __name__ == '__main__':
     if params.ss3_read:
         ss_read.append(3)
     
-    #List of sun sensors to use for tracking (need to check if data is being read from sensor)
+    #List of sun sensors to use for tracking (also need to check if data is being read from sensor)
     ss_track = []
     if params.ss1_read:
         if params.ss1_track:
@@ -922,42 +960,49 @@ if __name__ == '__main__':
     imu=IMU(com_port=params.imu_com_port,baudrate=params.imu_baud_rate)
     
     #Establish communication with PTU
-    ptu_cmd_delay=params.ptu_cmd_delay #0.010
     try:
-        ptu = PTU(com_port='COM9',baudrate=9600)
+        ptu_x = PTU(com_port=params.ptu_y_com_port,baudrate=9600)
     except:
-        print('COULD NOT TALK TO PTU!!!')
-        ptu=None
+        print('COULD NOT TALK TO PTU pan axis!!!')
+        ptu_x=None
+    try:
+        ptu_y = PTU(com_port=params.ptu_y_com_port,baudrate=9600)
+    except:
+        print('COULD NOT TALK TO PTU tilt axis!!!')
+        ptu_y=None
 
     #Set ptu=None if not using tracking to ensure PTU is not moved after initial offset
     if track_mode == 4:
-        ptu.ptu.close()
-        ptu=None
+        ptu_x.ptu.close()
+        ptu_y.ptu.close()
+        ptu_x=None
+        ptu_y=None
         print('Not tracking, so disconnecting from the PTU for safe measure')
 
     #Initiate PTU tracking
     ss_tracking = SS_tracking(ss,
-                             ptu,
-                             imu,
-                             ss_read=ss_read,
-                             ss_track=ss_track,
-                             ss_eshim_x=[params.ss1_eshim_x,
-                                         params.ss2_eshim_x,
-                                         params.ss3_eshim_x], 
-                             ss_eshim_y=[params.ss1_eshim_y,
-                                         params.ss2_eshim_y,
-                                         params.ss3_eshim_y],
-                             filter_kern=params.filter_kern,
-                             pid_x=pid_x,
-                             pid_y=pid_y,
-                             ptu_cmd_delay=ptu_cmd_delay,
-                             track_mode=track_mode,
-                             hz=params.hz,
-                             track_time=params.track_time,
-                             save_dir=params.save_dir,
-                             track_x=params.track_x,
-                             track_y=params.track_y,
-                             )
+                              ptu_x,
+                              ptu_y,
+                              imu,
+                              ss_read=ss_read,
+                              ss_track=ss_track,
+                              ss_eshim_x=[params.ss1_eshim_x,
+                                          params.ss2_eshim_x,
+                                          params.ss3_eshim_x], 
+                              ss_eshim_y=[params.ss1_eshim_y,
+                                          params.ss2_eshim_y,
+                                          params.ss3_eshim_y],
+                              filter_kern=params.filter_kern,
+                              pid_x=pid_x,
+                              pid_y=pid_y,
+                              ptu_cmd_delay=params.ptu_cmd_delay,
+                              track_mode=track_mode,
+                              hz=params.hz,
+                              track_time=params.track_time,
+                              save_dir=params.save_dir,
+                              track_x=params.track_x,
+                              track_y=params.track_y,
+                              )
         
     print('Tracking with sun sensors',ss_track,'for',params.track_time,'seconds')
     
@@ -976,16 +1021,17 @@ if __name__ == '__main__':
     except:
         print('Could not disconnect from IMU')
     
-    #Close PTU connection
+    #Close PTU connections
     try:
-#        ptu.cmd('@01STOP\r')
-#        ptu.cmd('@01SSPD80000\r')
-#        ptu.cmd('@01X-2585083\r')
-#        time.sleep(5)
-        ptu.cmd('@01STOP\r')
-        ptu.ptu.close()
+        ptu_x.cmd('@01STOP\r')
+        ptu_x.ptu.close()
     except:
-        print('Could not disconnect from PTU')
+        print('Could not disconnect from PTU Pan Axis')
+    try:
+        ptu_y.cmd('@01STOP\r')
+        ptu_y.ptu.close()
+    except:
+        print('Could not disconnect from PTU Tilt Axis')
     
     #Close sun sensor connections
     for i in range(len(ss)):
@@ -993,10 +1039,9 @@ if __name__ == '__main__':
             ss[i].ss.serial.close() 
         except:
             print('could not close sun sensor',i)
-        
+
+    ##################################### Plot Data ###########################        
     try:
-        
-    
         #Plot y_angle raw vs. filtered 
         x=df['elapsed']
         y1=df['imu_ang_z']*180./np.pi
