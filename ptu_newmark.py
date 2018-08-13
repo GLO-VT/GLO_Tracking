@@ -40,15 +40,14 @@ class PTU:
             self.cmd('i ')    #Send this command to PTU to make it respond to commands
             print('Connected to PTU D300 Ebay (or not)')
      
-    def read(self,command,delay=0.010):
+    def read(self,command):
         '''
         Send ptu a command, and return the ptu response
         '''
         try:
             self.ptu.write(command.encode())
-            time.sleep(delay)
+            time.sleep(self.cmd_delay)
             bytesToRead = self.ptu.inWaiting()
-            time.sleep(delay)
             ptu_out = self.ptu.read(bytesToRead)
             #print(ptu_out)
             ptu_out = ptu_out.decode().split('\r')[0]
@@ -57,14 +56,35 @@ class PTU:
             print('Could not read command from PTU')
             return
         
-    def cmd(self,command,delay=0.050):
+#    def cmd(self,command):
+#        '''
+#        Send command to PTU
+#        ''' 
+#        self.ptu.write(command.encode())
+#        time.sleep(self.cmd_delay)
+#        
+#        return
+    
+    def cmd(self,command,delay=0.05):
         '''
         Send command to PTU
-        '''
-        time.sleep(delay)
-        self.ptu.write(command.encode())
-        
-        return
+        ''' 
+        bytesToRead = self.ptu.inWaiting()
+        self.ptu.write(command.encode()) 
+        t0=time.time()
+        while (self.ptu.inWaiting() == bytesToRead):
+            if (time.time()-t0) > 0.03:
+                print('stuck here')
+                #print('ptu response=',self.ptu.read(bytesToRead).decode().split('\r')[0])
+                #print('tried to send:',command,'ptu response=',self.ptu.read(bytesToRead).decode().split('\r')[0])
+                break
+            time.sleep(0.001)
+            pass
+        time.sleep(0.03)
+        bytesToRead = self.ptu.inWaiting()
+        ptu_out = self.ptu.read(bytesToRead)
+        ptu_out = ptu_out.decode().split('\r')[0]
+        return ptu_out
         
      
                   
