@@ -126,6 +126,15 @@ class SS_tracking:
         self.spd_last_x = 0.0
         self.spd_last_y = 0.0
         
+        self.t1=999
+        self.t2=999
+        self.t3=999
+        self.t4=999
+        self.t5=999
+        self.t6=999
+        self.t7=999
+        self.t8=999
+        self.t9=999
         self.t10=999
         self.t11=999
         
@@ -245,6 +254,9 @@ class SS_tracking:
         header[9]=self.track_time
         header[10]=self.ss_eshim_x
         header[11]=self.ss_eshim_y
+        header[12]=self.filter_kern
+        header[13] = self.track_x
+        header[14] = self.track_y
         df.columns = header
         df.to_csv(f_name, index=False)  #add line 1 of header
         
@@ -266,6 +278,9 @@ class SS_tracking:
         header[9]='track_time'
         header[10]='eshim_x'
         header[11]='eshim_y'
+        header[12] = 'filter_kern'
+        header[13] = 'track_x'
+        header[14] = 'track_y'
         df.columns = header
         df.to_csv(f_name, index=False) #add line 2 of header
         
@@ -332,7 +347,8 @@ class SS_tracking:
             #self.ptu_x.cmd('@01SSPD40000\r')
             self.t11 = time.time()
         if axis == 'y':
-            self.ptu_y.cmd('@01SSPD'+str(np.abs(self.ptu_cmd_x))+'\r')   #send y-axis ptu velocity command (absolute value of ptu_cmd
+            command = '@01SSPD'+str(int(np.abs(ptu_speed)))+'\r'
+            self.ptu_y.cmd(command)   #send y-axis ptu velocity command (absolute value of ptu_cmd
             
     def ptu_jog_pos(self,axis='x'):
         '''
@@ -365,7 +381,7 @@ class SS_tracking:
             else:
                 self.ptu_dir_x_new = self.ptu_dir_x
         if axis == 'y':
-            self.ptu_y.cmd('@01J-\r')  #jog ptu in negative direction
+            ptu_response = self.ptu_y.cmd('@01J-\r')  #jog ptu in negative direction
             if ptu_response == 'OK':
                 self.ptu_dir_y_new=-1
             else:
@@ -425,7 +441,7 @@ class SS_tracking:
 #                    offset = self.sine_wave()
 #                    ang_x[i-1] = self.ss[i-1].ang_x_raw + offset
 #                    ang_y[i-1] = self.ss[i-1].ang_y_raw + offset
-
+            print(ang_x)
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
 #            self.ss_mean_x = np.nanmean(ang_x)
@@ -461,7 +477,7 @@ class SS_tracking:
                     #weights by the appropriate indices of the past ss_mean_x and ss_mean_y values
                     for i in np.arange(-1,-len(self.filter_kern),-1):
                         self.ss_filt_x += self.filter_kern[i-1]*self.data['ss_mean_x'][i]
-                        self.ss_filt_y += self.filter_kern[i-1]*self.data['ss_mean_x'][i]
+                        self.ss_filt_y += self.filter_kern[i-1]*self.data['ss_mean_y'][i]
                 else:
                     #Just use raw ss data (mean values) until enough samples have been collected (# of elements of filter_kern)
                     self.ss_filt_x = self.ss_mean_x
@@ -473,9 +489,13 @@ class SS_tracking:
             try:
                 if (self.ss_filt_x > -5) & (self.ss_filt_x < 5):
                     self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
+                    #Track mode 3: use differential velocity control (last speed + pid output)
+                    if self.track_mode == 2:
+                        self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos
                     if self.track_mode == 3:
                         self.ptu_cmd_x = self.spd_last_x + self.pid_out_x*self.pid_x.deg2pos  #convert to PTU positions
                         self.spd_last_x = self.ptu_cmd_x
+                    #Track mode 4: use PID output - imu_ang_z as PTU command
                     if self.track_mode == 4:
                         if self.imu_filt_x != np.nan:
                             self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos - self.imu_filt_x  #convert to PTU positions
@@ -489,6 +509,8 @@ class SS_tracking:
                     
                 if (self.ss_filt_y > -5) & (self.ss_filt_y < 5):
                     self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
+                    if self.track_mode == 2:
+                        self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos
                     if self.track_mode == 3:
                         self.ptu_cmd_y = self.spd_last_y + self.pid_out_y*self.pid_y.deg2pos  #convert to PTU positions
                         self.spd_last_y = self.ptu_cmd_y
@@ -741,17 +763,17 @@ if __name__ == '__main__':
                         help='Tracking in x-axis')
 
     parser.add_argument('-ty','--track_y',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='Tracking in y-axis')
     
     parser.add_argument('-tm','--track_mode',   # 3 = differential velocity mode (no IMU)
-                        default=3,              # 4 = IMU compensation
+                        default=2,              # 4 = IMU compensation
                         type=int,
                         help='Tracking mode')
     
     parser.add_argument('-fk','--filter_kern',
-                        default=[0.5,0.5],
+                        default=[0.3333,0.3333,0.3333],
                         type=list,
                         help='Filter mode')
     
@@ -797,12 +819,12 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=1.0,
+                        default=10.0,
                         type=float,
                         help='Proportional gain x-axis')
     
     parser.add_argument('-kpy','--kpy',
-                        default=-0.0,
+                        default=-2.0,
                         type=float,
                         help='Proportional gain y-axis')
     
@@ -817,7 +839,7 @@ if __name__ == '__main__':
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=0.0,
+                        default=0.5,
                         type=float,
                         help='Integral gain x-axis')
     
@@ -867,7 +889,7 @@ if __name__ == '__main__':
                         help='SS1 electronic shim x-axis')
     
     parser.add_argument('-ss2_ex','--ss2_eshim_x',
-                        default=-2.0,
+                        default=-0.0,
                         type=float,
                         help='SS2 electronic shim x-axis')
     
@@ -892,7 +914,7 @@ if __name__ == '__main__':
                         help='SS3 electronic shim y-axis')
     
     parser.add_argument('-ss1_c','--ss1_com_port',
-                        default='COM8',
+                        default='COM6',
                         type=str,
                         help='SS1 comm port')
     
@@ -960,7 +982,7 @@ if __name__ == '__main__':
                         help='IMU baud_rate')
     
     parser.add_argument('-ptu_yc','--ptu_y_com_port',
-                        default='COM10',
+                        default='COM11',
                         type=str,
                         help='IMU comm port')    
     
@@ -1088,16 +1110,22 @@ if __name__ == '__main__':
     
     #Establish communication with PTU
     try:
-        ptu_x = PTU(com_port=params.ptu_x_com_port,
-                    baudrate=params.ptu_x_baud_rate,
-                    cmd_delay=params.ptu_cmd_delay)
+        if params.track_x:
+            ptu_x = PTU(com_port=params.ptu_x_com_port,
+                        baudrate=params.ptu_x_baud_rate,
+                        cmd_delay=params.ptu_cmd_delay)
+        else:
+            ptu_x = None
     except:
         print('COULD NOT TALK TO PTU pan axis!!!')
         ptu_x=None
     try:
-        ptu_y = PTU(com_port=params.ptu_y_com_port,
-                    baudrate=params.ptu_y_baud_rate,
-                    cmd_delay=params.ptu_cmd_delay)
+        if params.track_y:
+            ptu_y = PTU(com_port=params.ptu_y_com_port,
+                        baudrate=params.ptu_y_baud_rate,
+                        cmd_delay=params.ptu_cmd_delay)
+        else:
+            ptu_y = None
     except:
         print('COULD NOT TALK TO PTU tilt axis!!!')
         ptu_y=None
@@ -1188,9 +1216,29 @@ if __name__ == '__main__':
         y1=df['imu_ang_z']*180./np.pi
         y2=df['imu_filt_x']*180./np.pi
 #        y3=df['ss2_x_raw']
-        y4=df['ss_filt_x']
+        y4=df['ss2_x_raw']
 #        y5=df['ss2_x_raw']
         y6=df['ptu_cmd_x']
+
+        #y12=df['imu_filt_y']*180./np.pi
+#        y3=df['ss2_x_raw']
+        y14=df['ss2_y_raw']
+#        y5=df['ss2_x_raw']
+        y16=df['ptu_cmd_y']
+        
+        plt.figure(figsize=(10,10))
+        plt.plot(y4,y14,'o')
+        win_size=1.0
+        plt.xlim((-win_size,win_size))
+        plt.ylim((-win_size,win_size))
+        plt.hlines(0.1,-0.1,0.1,color='red')
+        plt.vlines(0.1,-0.1,0.1,color='red')
+        plt.hlines(-0.1,-0.1,0.1,color='red')
+        plt.vlines(-0.1,-0.1,0.1,color='red')
+        plt.grid()
+        
+        plt.figure()
+        plt.hist(df['ss2_x_raw'],bins=200)
         
         plt.figure()
         plt.plot(x,y1,'o-',label='imu_ang_z')
