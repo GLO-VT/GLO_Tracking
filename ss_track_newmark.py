@@ -121,6 +121,7 @@ class SS_tracking:
         self.ptu_vel_hi = 80000 #Set maximum velocity of ptu to 80000 steps/sec
         self.ptu_sat = False #gets set to True if PTU is saturated (0>ptu_vel<15 or ptu_vel>80000)
         self.pid_integrate = True  #Set to False to ignore integral PID gain 
+        self.imu_filt_x = 0.0
         
         #Initialize PTU speed to 0
         self.spd_last_x = 0.0
@@ -180,7 +181,9 @@ class SS_tracking:
                                           't8',
                                           't9',
                                           't10',
-                                          't11'
+                                          't11',
+                                          'pid_out_x',
+                                          'pid_out_y'
                                            ])
         
 #    def setup_ptu(self):
@@ -441,7 +444,7 @@ class SS_tracking:
 #                    offset = self.sine_wave()
 #                    ang_x[i-1] = self.ss[i-1].ang_x_raw + offset
 #                    ang_y[i-1] = self.ss[i-1].ang_y_raw + offset
-            print(ang_x)
+            print(ang_x,round(self.imu_filt_x*180/np.pi,4))
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
 #            self.ss_mean_x = np.nanmean(ang_x)
@@ -692,7 +695,9 @@ class SS_tracking:
                         self.t8,
                         self.t9,
                         self.t10,
-                        self.t11
+                        self.t11,
+                        self.pid_out_x,
+                        self.pid_out_y
                         ]
 #            except:
 #                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
@@ -768,12 +773,12 @@ if __name__ == '__main__':
                         help='Tracking in y-axis')
     
     parser.add_argument('-tm','--track_mode',   # 3 = differential velocity mode (no IMU)
-                        default=2,              # 4 = IMU compensation
+                        default=3,              # 4 = IMU compensation
                         type=int,
                         help='Tracking mode')
     
     parser.add_argument('-fk','--filter_kern',
-                        default=[0.3333,0.3333,0.3333],
+                        default=[1.0],
                         type=list,
                         help='Filter mode')
     
@@ -793,7 +798,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=60,
+                        default=1200,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -819,27 +824,27 @@ if __name__ == '__main__':
 
 ###### PID parameters ###############
     parser.add_argument('-kpx','--kpx',
-                        default=10.0,
+                        default=.04,
                         type=float,
                         help='Proportional gain x-axis')
     
     parser.add_argument('-kpy','--kpy',
-                        default=-2.0,
+                        default=-0.04,
                         type=float,
                         help='Proportional gain y-axis')
     
     parser.add_argument('-kdx','--kdx',
-                        default=0.0,
+                        default=0.2,
                         type=float,
                         help='Derivative gain x-axis')
     
     parser.add_argument('-kdy','--kdy',
-                        default=-0.0,
+                        default=-0.2,
                         type=float,
                         help='Derivative gain y-axis')
     
     parser.add_argument('-kix','--kix',
-                        default=0.5,
+                        default=0.0,
                         type=float,
                         help='Integral gain x-axis')
     
@@ -852,12 +857,12 @@ if __name__ == '__main__':
 ######## Sun sensor parameters #################
     
     parser.add_argument('-ss1_r','--ss1_read',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='Read data from SS1 (True/False)')
     
     parser.add_argument('-ss2_r','--ss2_read',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Read data from SS2 (True/False)')
     
@@ -867,12 +872,12 @@ if __name__ == '__main__':
                         help='Read data from SS3 (True/False)')
     
     parser.add_argument('-ss1','--ss1_track',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='Track with SS1 (True/False)')
     
     parser.add_argument('-ss2','--ss2_track',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Track with SS2 (True/False)')
     
@@ -1216,13 +1221,14 @@ if __name__ == '__main__':
         y1=df['imu_ang_z']*180./np.pi
         y2=df['imu_filt_x']*180./np.pi
 #        y3=df['ss2_x_raw']
-        y4=df['ss2_x_raw']
+        y4=df['ss1_x_raw']
 #        y5=df['ss2_x_raw']
         y6=df['ptu_cmd_x']
+        y7=df['pid_out_x']
 
         #y12=df['imu_filt_y']*180./np.pi
 #        y3=df['ss2_x_raw']
-        y14=df['ss2_y_raw']
+        y14=df['ss1_y_raw']
 #        y5=df['ss2_x_raw']
         y16=df['ptu_cmd_y']
         
@@ -1238,7 +1244,7 @@ if __name__ == '__main__':
         plt.grid()
         
         plt.figure()
-        plt.hist(df['ss2_x_raw'],bins=200)
+        plt.hist(df['ss1_x_raw'],bins=200)
         
         plt.figure()
         plt.plot(x,y1,'o-',label='imu_ang_z')
@@ -1247,14 +1253,15 @@ if __name__ == '__main__':
         plt.title('X-Axis sensor data at '+str(params.hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
         plt.legend()
         
-        #plt.figure(2)
+        plt.figure()
        # plt.plot(x,y2,'o-',label='imu_filt_x')
         plt.plot(x,y4,'o-',label='ss2_ss_filt_x')
        # plt.plot(x,y4,'o-',label='filtered ss')
-        plt.plot(x,y6,'o-',label='ptu_cmd_x')
+        plt.plot(x,y6/ss_tracking.pid_x.deg2pos,'o-',label='ptu_cmd_x')
+        plt.plot(x,y7*10,'o',label='pid_out_x')
         plt.xlabel('Time Elapsed (seconds)')
         plt.ylabel('Degrees')
-        plt.ylim((-3,3))
+        #plt.ylim((-3,3))
         #plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
         plt.legend()
         
@@ -1262,6 +1269,20 @@ if __name__ == '__main__':
         plt.title('X-Axis sensor data at '+str(params.hz)+'hz\n kp='+str(params.kpx)+' ki='+str(params.kix)+' kd='+str(params.kdx))
         plt.plot(x,y4,'o-',label='ss2_ang_x_raw')
         plt.plot(x,y6,'o-',label='ptu cmd x')
+        plt.legend()
+        plt.figure()
+       # plt.plot(x,y2,'o-',label='imu_filt_x')
+        plt.plot(x,y4,'o-',label='ss2_ss_filt_x')
+        plt.plot(x,y1,'o-',label='imu_ang_z')
+       # plt.plot(x,y4,'o-',label='filtered ss')
+        plt.plot(x,y6/ss_tracking.pid_x.deg2pos,'o-',label='ptu_cmd_x')
+        #plt.plot(x,y7*10,'o',label='pid_out_x')
+        plt.xlabel('Time Elapsed (seconds)')
+        plt.ylabel('Degrees')
+        plt.hlines(0.1,x[0],x[-1],color='red')
+        plt.hlines(-0.1,x[0],x[-1],color='red')
+        #plt.ylim((-3,3))
+        #plt.title('Y-Axis sensor data at '+str(hz)+'hz\n kp='+str(params.kpy)+' ki='+str(params.kiy)+' kd='+str(params.kdy))
         plt.legend()
     except:
         print('Failed to plot data')
