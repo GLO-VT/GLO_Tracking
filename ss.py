@@ -58,6 +58,16 @@ class SS:
                 self.ang_y_raw = -float(65536 - self.data[6])/1000.0
             else:    
                 self.ang_y_raw = float(self.data[6])/1000.0 
+            #Additional info register - determine if sun in field of view (FOV)
+            if self.data[0] == 0:
+                self.sun_in_fov = True
+            else:
+                self.sun_in_fov = False
+            #Additional info register set to 255 if radiation <300 W/m^2
+            if self.data[0] == 255:
+                self.no_sunlight = True
+            else:
+                self.no_sunlight = False
             self.data_exists=True
         except:
            print('Failed to read data from sun sensor',self.inst_id) 
@@ -102,7 +112,7 @@ class SS:
 #    ss3 = SS(inst_id=3,com_port='COM4',baudrate=115200)
            
 #    ss1 = SS(inst_id=1,com_port='COM4',baudrate=115200)
-#    ss2 = SS(inst_id=2,com_port='COM6',baudrate=115200)
+#    ss2 = SS(inst_id=2,com_port='COM4',baudrate=115200)
 #    ss3 = SS(inst_id=3,com_port='COM4',baudrate=115200)
 #    
 #    #Read data
@@ -139,7 +149,7 @@ class SS:
 #    for i in range(len(ss_all)):
 #        data['ss'+str(ss_all[i].inst_id)] = df
 #    
-#    #Collect and store data until rec_time expires
+    #Collect and store data until rec_time expires
 #    t0=time.time()
 #    while time.time() - t0 < rec_time:
 #        d_time=datetime.now()
@@ -167,6 +177,22 @@ class SS:
 #        else:
 #            time.sleep(delay)
             
-            
-            
-        
+#    hz=10
+#    rec_time=50000
+#    delay = 1.0/hz            
+#    t0=time.time()
+#    while time.time() - t0 < rec_time:
+#        d_time=datetime.now()
+#            
+#        #Read data
+#        ss2.read_data_all()
+#        
+#        print('x=',ss2.ang_x_raw,'y=',ss2.ang_y_raw)
+#            
+#        #Ensure that this loop iterates at desired data rate   
+#        t_diff = time.time() - t0
+#        if (delay - t_diff) > 0:
+#            time.sleep(delay - t_diff)
+#        else:
+#            time.sleep(delay)            
+#        
