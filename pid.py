@@ -70,7 +70,7 @@ class PID:
         self.Cd = 0
 
 
-    def GenOut(self, ss_off_x,first_run=False):
+    def GenOut(self, ss_off_x,run_num=False):
         """ Performs a PID computation and returns a control value based
             on the elapsed time (dt) and the error signal from a summing
             junction (the error parameter).
@@ -90,7 +90,7 @@ class PID:
             print('ran this 1')
             self.Ci += error * dt               # integral term
         self.Cd = 0
-        if first_run == False:
+        if run_num > 0:
             if dt > 0:                              # no div by zero
                 print('ran this 2')
                 self.Cd = de/dt                     # derivative term
@@ -101,4 +101,4 @@ class PID:
         print('self.prev_err',self.prev_err)
         print('output of pid',self.Cp + (self.Ki * self.Ci) + (self.Kd * self.Cd))
         # sum the terms and return the result
-        return self.Cp + (self.Ki * self.Ci) + (self.Kd * self.Cd)
+        return self.Cp + (self.Ki * self.Ci) + (self.Kd * self.Cd),dt
