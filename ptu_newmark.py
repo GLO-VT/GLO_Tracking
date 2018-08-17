@@ -74,7 +74,7 @@ class PTU:
         t0=time.time()
         while (self.ptu.inWaiting() == bytesToRead):
             if (time.time()-t0) > 0.03:
-                print('stuck here')
+                #print('stuck here')
                 #print('ptu response=',self.ptu.read(bytesToRead).decode().split('\r')[0])
                 #print('tried to send:',command,'ptu response=',self.ptu.read(bytesToRead).decode().split('\r')[0])
                 break
