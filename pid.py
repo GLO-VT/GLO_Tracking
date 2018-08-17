@@ -76,29 +76,23 @@ class PID:
             junction (the error parameter).
         """
         error = self.sp + ss_off_x 
-        print('error',error)
+  
         self.currtm = time.time()               # get t
         dt = self.currtm - self.prevtm          # get delta t
         de = error - self.prev_err              # get delta error
-        print('dt',dt)
-        print('de',de)
+
 
         self.Cp = self.Kp * error               # proportional term
-        print('Cp',self.Cp)
+
         #only add latest integral error if error is within integrator windup limits
         if (error < self.ilim_lo) | (error > self.ilim_hi):   
-            print('ran this 1')
             self.Ci += error * dt               # integral term
         self.Cd = 0
         if run_num > 0:
             if dt > 0:                              # no div by zero
-                print('ran this 2')
                 self.Cd = de/dt                     # derivative term
 
         self.prevtm = self.currtm               # save t for next pass
         self.prev_err = error                   # save t-1 error
-        print('self.prevtm',self.prevtm)
-        print('self.prev_err',self.prev_err)
-        print('output of pid',self.Cp + (self.Ki * self.Ci) + (self.Kd * self.Cd))
         # sum the terms and return the result
         return self.Cp + (self.Ki * self.Ci) + (self.Kd * self.Cd),dt
