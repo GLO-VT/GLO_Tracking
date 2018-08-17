@@ -23,10 +23,17 @@ class SS:
         self.inst_id = inst_id
         self.com_port = com_port
         self.baudrate = baudrate
+        self.scale = 1.0
+        self.sun_in_fov = True
+        self.no_sunlight = False
+        self.ang_x_raw = 0.0
+        self.ang_y_raw = 0.0
         try:
             self.ss = minimalmodbus.Instrument(self.com_port,self.inst_id)
             self.ss.serial.baudrate=self.baudrate
             self.fov = self.ss.read_register(2)
+            if self.fov == 60:
+                self.scale = 10.0  #coarse ss is mounted 180 degrees off fine sun sensors
             print('Connected to sun sensor',self.inst_id,'FOV = +/-',self.fov,'degrees')
         except:
             print('Hey sun sensor',self.inst_id,'why wont you talk to me?') 
@@ -40,24 +47,24 @@ class SS:
             self.temp = float(self.data[2])/10.0   #Temperature degrees F
             #ang_x_filt
             if self.data[3] > 50000:
-                self.ang_x_filt = -float(65536 - self.data[3])/1000.0
+                self.ang_x_filt = self.scale*-float(65536 - self.data[3])/1000.0
             else:    
-                self.ang_x_filt = float(self.data[3])/1000.0
+                self.ang_x_filt = self.scale*-float(self.data[3])/1000.0
             #ang_y_filt
             if self.data[4] > 50000:
-                self.ang_y_filt = -float(65536 - self.data[4])/1000.0
+                self.ang_y_filt = self.scale*--float(65536 - self.data[4])/1000.0
             else:    
-                self.ang_y_filt = float(self.data[4])/1000.0
+                self.ang_y_filt = self.scale*-float(self.data[4])/1000.0
              #ang_x_raw
             if self.data[5] > 50000:
-                self.ang_x_raw = -float(65536 - self.data[5])/1000.0
+                self.ang_x_raw = self.scale*--float(65536 - self.data[5])/1000.0
             else:    
-                self.ang_x_raw = float(self.data[5])/1000.0
+                self.ang_x_raw = self.scale*-float(self.data[5])/1000.0
             #ang_y_raw
             if self.data[6] > 50000:
-                self.ang_y_raw = -float(65536 - self.data[6])/1000.0
+                self.ang_y_raw = self.scale*--float(65536 - self.data[6])/1000.0
             else:    
-                self.ang_y_raw = float(self.data[6])/1000.0 
+                self.ang_y_raw = self.scale*-float(self.data[6])/1000.0 
             #Additional info register - determine if sun in field of view (FOV)
             if self.data[0] == 0:
                 self.sun_in_fov = True
