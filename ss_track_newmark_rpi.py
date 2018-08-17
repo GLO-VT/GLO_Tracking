@@ -424,9 +424,11 @@ class SS_tracking:
         self.ptu_stop(axis='x')
         self.ptu_stop(axis='y')
         
-        #Read coares SS x/y offsets       
+        #Read coarse SS x/y offsets       
         self.ss4.read_data_all()
-        if self.ss4.additional_info == 0x00:
+        #Check to see if sun in FOV of coarse sun sensor
+        if self.ss4.sun_in_fov == True:
+            #Add eshims to coarase ss offsets
             self.ss4_x_raw = self.ss4.ang_x_raw + self.ss_eshim_x[3]
             self.ss4_y_raw = self.ss4.ang_y_raw + self.ss_eshim_y[3]
             
@@ -439,6 +441,8 @@ class SS_tracking:
             self.coarse_move_time_y = int(self.coarse_steps_y/self.coarse_vel)
         
             #Send poistion commands to PTU
+            @01INC
+            @01ABS
             self.ptu_x.cmd('command to move '+str(self.coarse_steps_x)+'\r')
             self.ptu_y.cmd('command to move '+str(self.coarse_steps_y)+'\r')
             
@@ -477,20 +481,6 @@ class SS_tracking:
             #Collect Sun Sensor data
             for i in ss_read:    #Loop through all sun sensors in ss_read
                 self.ss[i-1].read_data_all()    #Read all data from sun sensor using SS class, correct for python 0-indexing 
-                
-                #Check additional info register to determine if sun in fov...need to fix
-                if i == 1:
-                    self.ss1_additional_info = self.ss[i-1].additional_info
-                    if self.ss1_additional_info != 0x00:
-                        self.ss1_sun_in_fov
-                if i == 2:
-                    self.ss2_additional_info = self.ss[i-1].additional_info
-                    if self.ss2_additional_info != 0x00:
-                        self.ss2_sun_in_fov
-                if i == 3:
-                    self.ss3_additional_info = self.ss[i-1].additional_info
-                    if self.ss3_additional_info != 0x00:
-                        self.ss3_sun_in_fov
                         
                 if i in self.ss_track:   #Only include x and y SS offsets if included in ss_track
                     ang_x[i-1] = self.ss[i-1].ang_x_raw + self.ss_eshim_x[i-1]
@@ -850,7 +840,7 @@ if __name__ == '__main__':
                         help='Tracking mode')
     
     parser.add_argument('-fk','--filter_kern',
-                        default=[1.0],
+                        default=[0.5,0.5],
                         type=list,
                         help='Filter mode')
     
