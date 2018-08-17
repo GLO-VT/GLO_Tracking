@@ -123,6 +123,9 @@ class SS_tracking:
         self.pid_integrate = True  #Set to False to ignore integral PID gain 
         self.imu_filt_x = 0.0
         
+        self.pid_x_dt = np.nan
+        self.pid_y_dt = np.nan
+        
         #Initialize PTU speed to 0
         self.spd_last_x = 0.0
         self.spd_last_y = 0.0
@@ -183,7 +186,9 @@ class SS_tracking:
                                           't10',
                                           't11',
                                           'pid_out_x',
-                                          'pid_out_y'
+                                          'pid_out_y',
+                                          'pid_x_dt',
+                                          'pid_y_dt'
                                            ])
         
 #    def setup_ptu(self):
@@ -447,14 +452,14 @@ class SS_tracking:
             print(ang_x,round(self.imu_filt_x*180/np.pi,4))
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
-#            self.ss_mean_x = np.nanmean(ang_x)
-#            self.ss_mean_y = np.nanmean(ang_y)
+            self.ss_mean_x = np.nanmean(ang_x)
+            self.ss_mean_y = np.nanmean(ang_y)
             
-            #Take geometric mean of all sun sensors listed in ss_track
-            num_x = np.count_nonzero(~np.isnan(ang_x)) #count number of non-nan elements in ang_x
-            num_y = np.count_nonzero(~np.isnan(ang_y)) #count number of non-nan elements in ang_y
-            self.ss_mean_x = np.nanprod(ang_x)**(1./num_x) #geometric mean
-            self.ss_mean_y = np.nanprod(ang_y)**(1./num_y) #geometric mean
+#            #Take geometric mean of all sun sensors listed in ss_track
+#            num_x = np.count_nonzero(~np.isnan(ang_x)) #count number of non-nan elements in ang_x
+#            num_y = np.count_nonzero(~np.isnan(ang_y)) #count number of non-nan elements in ang_y
+#            self.ss_mean_x = np.nanprod(ang_x)**(1./num_x) #geometric mean
+#            self.ss_mean_y = np.nanprod(ang_y)**(1./num_y) #geometric mean
             
             #Read current PTU position - need to implement, see genie_track_newmark.py
             
@@ -491,7 +496,8 @@ class SS_tracking:
             #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
             try:
                 if (self.ss_filt_x > -5) & (self.ss_filt_x < 5):
-                    self.pid_out_x = self.pid_x.GenOut(self.ss_filt_x)  #generate x-axis control output in "degrees"
+                    self.pid_out_x,self.pid_y_dt = self.pid_x.GenOut(self.ss_filt_x,self.cnt)  #generate x-axis control output in "degrees"
+                    print(self.cnt,self.pid_out_x)
                     #Track mode 3: use differential velocity control (last speed + pid output)
                     if self.track_mode == 2:
                         self.ptu_cmd_x = self.pid_out_x*self.pid_x.deg2pos
@@ -511,7 +517,7 @@ class SS_tracking:
                     self.ptu_cmd_x = np.nan
                     
                 if (self.ss_filt_y > -5) & (self.ss_filt_y < 5):
-                    self.pid_out_y = self.pid_y.GenOut(self.ss_filt_y)  #generate y-axis control output in "degrees"
+                    self.pid_out_y,self.pid_x_dt = self.pid_y.GenOut(self.ss_filt_y,self.cnt)  #generate y-axis control output in "degrees"
                     if self.track_mode == 2:
                         self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos
                     if self.track_mode == 3:
@@ -697,7 +703,9 @@ class SS_tracking:
                         self.t10,
                         self.t11,
                         self.pid_out_x,
-                        self.pid_out_y
+                        self.pid_out_y,
+                        self.pid_x_dt,
+                        self.pid_y_dt
                         ]
 #            except:
 #                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
@@ -768,7 +776,7 @@ if __name__ == '__main__':
                         help='Tracking in x-axis')
 
     parser.add_argument('-ty','--track_y',
-                        default=True,
+                        default=False,
                         type=bool,
                         help='Tracking in y-axis')
     
@@ -778,7 +786,7 @@ if __name__ == '__main__':
                         help='Tracking mode')
     
     parser.add_argument('-fk','--filter_kern',
-                        default=[1.0],
+                        default=[0.5,0.5],
                         type=list,
                         help='Filter mode')
     
@@ -798,7 +806,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=1200,
+                        default=5,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -982,7 +990,7 @@ if __name__ == '__main__':
                         help='IMU comm port')    
     
     parser.add_argument('-ptu_xb','--ptu_x_baud_rate',
-                        default=9600,
+                        default=115200,
                         type=int,
                         help='IMU baud_rate')
     
@@ -992,7 +1000,7 @@ if __name__ == '__main__':
                         help='IMU comm port')    
     
     parser.add_argument('-ptu_yb','--ptu_y_baud_rate',
-                        default=9600,
+                        default=115200,
                         type=int,
                         help='IMU baud_rate')
     
