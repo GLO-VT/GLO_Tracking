@@ -167,8 +167,8 @@ class SS_tracking:
                                           'ss2_y_raw',
                                           'ss3_x_raw',
                                           'ss3_y_raw',
-                                          'ss4_x_raw'
-                                          'ss4_y_raw'
+                                          'ss4_x_raw',
+                                          'ss4_y_raw',
                                           'ptu_cmd_x',
                                           'ptu_cmd_y',
                                           'ptu_pos_x',
@@ -515,8 +515,8 @@ class SS_tracking:
 #                    offset = self.sine_wave()
 #                    ang_x[i-1] = self.ss[i-1].ang_x_raw + offset
 #                    ang_y[i-1] = self.ss[i-1].ang_y_raw + offset
-            self.ptu_pos_x = int(self.ptu_position(self,axis='x')) 
-            self.ptu_pos_y = int(self.ptu_position(self,axis='y')) 
+            self.ptu_pos_x = int(self.ptu_position(axis='x')) 
+            self.ptu_pos_y = int(self.ptu_position(axis='y')) 
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
             self.ss_mean_x = np.nanmean(ang_x)
@@ -638,7 +638,7 @@ class SS_tracking:
                     if ~self.homing_timer_x_done:
                         if (time.time() - self.homing_timer_x_start) > self.homing_x_cnt*self.homing_x_time:
                             self.homing_timer_x_done = True
-                            if np.abs(int(self.ptu_position(self,axis='x'))) < 100:  #if position if within +/- 100 steps, call it home
+                            if np.abs(int(self.ptu_position(axis='x'))) < 100:  #if position if within +/- 100 steps, call it home
                                 self.homing_x_complete = True
                                 self.ptu_stop(axis='x')
                             else:
@@ -656,7 +656,7 @@ class SS_tracking:
                     if ~self.homing_timer_y_done:
                         if (time.time() - self.homing_timer_y_start) > self.homing_y_cnt*self.homing_y_time:
                             self.homing_timer_y_done = True
-                            if np.abs(int(self.ptu_position(self,axis='y'))) < 100:  #if position if within +/- 100 steps, call it home
+                            if np.abs(int(self.ptu_position(axis='y'))) < 100:  #if position if within +/- 100 steps, call it home
                                 self.homing_y_complete = True
                                 self.ptu_stop(axis='y')
                             else:
@@ -741,18 +741,19 @@ class SS_tracking:
             
             #Coarse track is completed after coarse timer expires and sun is within limits of fine sun sensors
             if ~self.coarse_track_complete:
-                if (time.time() - self.coarse_track_t_start) > (self.coarse_track_delay + self.coarse_settle_t):
-                    if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit):
-                        if (-self.fine_track_limit < self.ss_filt_y < self.fine_track_limit):
-                            self.coarse_track_complete = True
-                            self.coarse_track_in_progess = False
-                    else:
-                       self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
-                       self.coarse_track_complete = True  #Need this to reset coarse tracking
+                if self.coarse_track_in_progess:
+                    if (time.time() - self.coarse_track_t_start) > (self.coarse_track_delay + self.coarse_settle_t):
+                        if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit):
+                            if (-self.fine_track_limit < self.ss_filt_y < self.fine_track_limit):
+                                self.coarse_track_complete = True
+                                self.coarse_track_in_progess = False
+                        else:
+                           self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
+                           self.coarse_track_complete = True  #Need this to reset coarse tracking
                        
 ##################### PTU Logic - Fine Tracking ###############################
             #Implement 'switch direction' logic for newmark PTU x-axis
-            if (self.homing_x_complete & self.homing_y_complete & ~self.coarse_track_in_progress):  #No fine tracking PTU commands during homing or coarse tracking
+            if (self.homing_x_complete & self.homing_y_complete & ~self.coarse_track_in_progess):  #No fine tracking PTU commands during homing or coarse tracking
                 if self.track_x:
                     self.t6 = time.time()
                     if (self.ptu_dir_x < 0):
@@ -993,7 +994,7 @@ if __name__ == '__main__':
                         help='Tracking in x-axis')
 
     parser.add_argument('-ty','--track_y',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='Tracking in y-axis')
     
@@ -1202,7 +1203,7 @@ if __name__ == '__main__':
     
 ###### PTU parameters ###########
     parser.add_argument('-ptu_xc','--ptu_x_com_port',
-                        default='COM9',
+                        default='COM11',
                         type=str,
                         help='IMU comm port')    
     
@@ -1212,7 +1213,7 @@ if __name__ == '__main__':
                         help='IMU baud_rate')
     
     parser.add_argument('-ptu_yc','--ptu_y_com_port',
-                        default='COM11',
+                        default='COM9',
                         type=str,
                         help='IMU comm port')    
     
@@ -1359,7 +1360,7 @@ if __name__ == '__main__':
     except:
         print('COULD NOT TALK TO PTU tilt axis!!!')
         ptu_y=None
-
+    
     #Set ptu=None if not using tracking to ensure PTU is not moved after initial offset
     if track_mode == 4:
         ptu_x.ptu.close()
