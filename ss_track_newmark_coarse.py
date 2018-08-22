@@ -130,12 +130,16 @@ class SS_tracking:
         self.spd_last_x = 0.0
         self.spd_last_y = 0.0
         
+        self.sun_in_fov = False
+        self.fine_track_limit = 3  #set limit for fine to give up and start coarse tracking
+        
         self.homing_vel = 80000
         self.homing_start = False
         self.homing_complete = True
         self.homing_steps = 20000 #increment homing moves by 1 degree
         
         self.coarse_track_start = False
+        self.coarse_track_in_progess = False
         self.coarse_track_complete = True
         self.coarse_settle_t = 1
         self.coarse_vel = 80000
@@ -163,6 +167,8 @@ class SS_tracking:
                                           'ss2_y_raw',
                                           'ss3_x_raw',
                                           'ss3_y_raw',
+                                          'ss4_x_raw'
+                                          'ss4_y_raw'
                                           'ptu_cmd_x',
                                           'ptu_cmd_y',
                                           'ptu_pos_x',
@@ -198,7 +204,8 @@ class SS_tracking:
                                           'pid_out_x',
                                           'pid_out_y',
                                           'pid_x_dt',
-                                          'pid_y_dt'
+                                          'pid_y_dt',
+                                          'coarse_track_in_progress'
                                            ])
         
 #    def setup_ptu(self):
@@ -499,12 +506,17 @@ class SS_tracking:
                 if i in self.ss_track:   #Only include x and y SS offsets if included in ss_track
                     ang_x[i-1] = self.ss[i-1].ang_x_raw + self.ss_eshim_x[i-1]
                     ang_y[i-1] = self.ss[i-1].ang_y_raw + self.ss_eshim_y[i-1]
+                    if ss[i-1].sun_in_fov:
+                        self.sun_in_fov = True
+                    else:
+                        self.sun_in_fov = False
                   
                     #Uncomment the next three lines to test a sine wave 
 #                    offset = self.sine_wave()
 #                    ang_x[i-1] = self.ss[i-1].ang_x_raw + offset
 #                    ang_y[i-1] = self.ss[i-1].ang_y_raw + offset
-            print(ang_x,round(self.imu_filt_x*180/np.pi,4))
+            self.ptu_pos_x = int(self.ptu_position(self,axis='x')) 
+            self.ptu_pos_y = int(self.ptu_position(self,axis='y')) 
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
             self.ss_mean_x = np.nanmean(ang_x)
@@ -550,7 +562,7 @@ class SS_tracking:
 ######################## PID Controller #######################################
             #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
             try:
-                if (self.ss_filt_x > -5) & (self.ss_filt_x < 5):
+                if (self.ss_filt_x > -self.fine_track_limit) & (self.ss_filt_x < -self.fine_track_limit) & self.sun_in_fov:
                     self.pid_out_x,self.pid_y_dt = self.pid_x.GenOut(self.ss_filt_x,self.cnt)  #generate x-axis control output in "degrees"
                     print(self.cnt,self.pid_out_x)
                     #Track mode 3: use differential velocity control (last speed + pid output)
@@ -571,7 +583,7 @@ class SS_tracking:
                     self.pid_out_x = np.nan
                     self.ptu_cmd_x = np.nan
                     
-                if (self.ss_filt_y > -5) & (self.ss_filt_y < 5):
+                if (self.ss_filt_y > -self.fine_track_limit) & (self.ss_filt_y < -self.fine_track_limit) & self.sun_in_fov:
                     self.pid_out_y,self.pid_x_dt = self.pid_y.GenOut(self.ss_filt_y,self.cnt)  #generate y-axis control output in "degrees"
                     if self.track_mode == 2:
                         self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos
@@ -597,8 +609,7 @@ class SS_tracking:
 ##################### Startup Homing Logic ####################################
             #Right now, the only condition that triggers homing is the first tracking run
             if self.cnt == 0: 
-               self.homing_x_start = True
-               self.homing_y_start = True
+               self.homing_start = True
                self.homing_x_complete = False
                self.homing_y_complete = False
                self.homing_timer_x_done = True
@@ -607,6 +618,7 @@ class SS_tracking:
                self.homing_y_time = 1  #home for increments of 1 second
                
             if self.homing_start:
+                self.homing_start = False
                 self.homing_x_cnt = 1
                 self.homing_y_cnt = 1
                 if self.track_x:
@@ -614,8 +626,8 @@ class SS_tracking:
                 if self.track_y:
                     self.ptu_stop(axis='y')
             
-            if self.track_x:
-                if ~self.homing_x_complete:
+            if ~self.homing_x_complete:
+                if self.track_x:
                     if self.homing_timer_x_done:
                         if self.homing_x_cnt % 2 != 0:   
                             self.ptu_home_pos(axis='x') #move positive direction if count is odd
@@ -624,7 +636,7 @@ class SS_tracking:
                         self.homing_timer_x_start = time.time()
                         self.homing_timer_x_done = False
                     if ~self.homing_timer_x_done:
-                        if (time.time() - self.homing_timer_x_start) > self.homing_cnt*self.homing_x_time:
+                        if (time.time() - self.homing_timer_x_start) > self.homing_x_cnt*self.homing_x_time:
                             self.homing_timer_x_done = True
                             if np.abs(int(self.ptu_position(self,axis='x'))) < 100:  #if position if within +/- 100 steps, call it home
                                 self.homing_x_complete = True
@@ -632,8 +644,8 @@ class SS_tracking:
                             else:
                                 self.homing_x_cnt+=1
                             
-            if self.track_y:
-                if ~self.homing_y_complete:
+            if ~self.homing_y_complete:
+                if self.track_y:
                     if self.homing_timer_y_done:
                         if self.homing_y_cnt % 2 != 0:   
                             self.ptu_home_pos(axis='y') #move positive direction if count is odd
@@ -642,7 +654,7 @@ class SS_tracking:
                         self.homing_timer_y_start = time.time()
                         self.homing_timer_y_done = False
                     if ~self.homing_timer_y_done:
-                        if (time.time() - self.homing_timer_y_start) > self.homing_cnt*self.homing_y_time:
+                        if (time.time() - self.homing_timer_y_start) > self.homing_y_cnt*self.homing_y_time:
                             self.homing_timer_y_done = True
                             if np.abs(int(self.ptu_position(self,axis='y'))) < 100:  #if position if within +/- 100 steps, call it home
                                 self.homing_y_complete = True
@@ -653,22 +665,23 @@ class SS_tracking:
 ##################### Coarse Tracking Logic ###################################            
             if self.cnt == 0: 
                 self.coarse_track_start = False
+                self.coarse_track_in_progess = False
                 self.coarse_track_complete = True
                 self.coarse_settle_t = 1
                 self.coarse_vel = 80000
            
             #Check all conditions that can trigger coarse tracking
             if (self.homing_x_complete & self.homing_y_complete & self.coarse_track_complete):
-                for i in self.ss_track:
-                    if ~ss[i-1].sun_in_fov:
-                        self.coarse_track_start = True
-                if (3 < self.ss_filt_x < -3) | (self.ss_filt_x == np.nan):
+                if ~self.sun_in_fov:
                     self.coarse_track_start = True
-                if (3 < self.ss_filt_y < -3) | (self.ss_filt_y == np.nan):
+                if (self.ss_filt_x < -self.fine_track_limit) | (self.ss_filt_x > self.fine_track_limit) | (self.ss_filt_x == np.nan):
+                    self.coarse_track_start = True
+                if (self.ss_filt_y < -self.fine_track_limit) | (self.ss_filt_y > self.fine_track_limit) | (self.ss_filt_y == np.nan):
                     self.coarse_track_start = True
             
             #Start coarse tracking
             if (self.homing_x_complete & self.homing_y_complete & self.coarse_track_start):
+                self.coarse_track_in_progess = True
                 self.coarse_track_complete = False
                 if self.track_x:
                     self.ptu_stop(axis='x')
@@ -726,13 +739,20 @@ class SS_tracking:
                     self.coarse_track_start = True  #Remain in coarse tracking until sun in fov of coarse sun sensor
                     self.coarse_track_complete = True  #Need this to reset coarse tracking
             
+            #Coarse track is completed after coarse timer expires and sun is within limits of fine sun sensors
             if ~self.coarse_track_complete:
-                if ((time.time() - self.coarse_track_t_start) > self.coarse_track_delay):
-                    self.coarse_track_complete = True
-                        
+                if (time.time() - self.coarse_track_t_start) > (self.coarse_track_delay + self.coarse_settle_t):
+                    if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit):
+                        if (-self.fine_track_limit < self.ss_filt_y < self.fine_track_limit):
+                            self.coarse_track_complete = True
+                            self.coarse_track_in_progess = False
+                    else:
+                       self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
+                       self.coarse_track_complete = True  #Need this to reset coarse tracking
+                       
 ##################### PTU Logic - Fine Tracking ###############################
             #Implement 'switch direction' logic for newmark PTU x-axis
-            if (self.homing_x_complete & self.homing_y_complete & self.coarse_track_complete):  #No fine tracking PTU commands during homing or coarse tracking
+            if (self.homing_x_complete & self.homing_y_complete & ~self.coarse_track_in_progress):  #No fine tracking PTU commands during homing or coarse tracking
                 if self.track_x:
                     self.t6 = time.time()
                     if (self.ptu_dir_x < 0):
@@ -864,10 +884,12 @@ class SS_tracking:
                         ang_y[1],
                         ang_x[2],
                         ang_y[2],
+                        ang_x[3],
+                        ang_y[3],
                         self.ptu_cmd_x,
                         self.ptu_cmd_y,
-                        np.nan,  #self.ptu_pos_x  NEED to add
-                        np.nan,  #self.ptu_pos_y NEED to add
+                        self.ptu_pos_x,  
+                        self.ptu_pos_y,
                         self.ptu_dir_x,
                         self.ptu_dir_y,
                         self.imu_accel.x,
@@ -899,7 +921,8 @@ class SS_tracking:
                         self.pid_out_x,
                         self.pid_out_y,
                         self.pid_x_dt,
-                        self.pid_y_dt
+                        self.pid_y_dt,
+                        self.coarse_track_in_progess
                         ]
 #            except:
 #                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
