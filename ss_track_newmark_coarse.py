@@ -131,16 +131,15 @@ class SS_tracking:
         self.spd_last_y = 0.0
         
         self.sun_in_fov = False
-        self.fine_track_limit = 3  #set limit for fine to give up and start coarse tracking
+        self.fine_track_limit = 3  #set angle offset limit (degrees) for fine to give up and start coarse tracking
         
         self.homing_vel = 80000
-        self.homing_start = False
-        self.homing_complete = True
-        self.homing_steps = 20000 #increment homing moves by 1 degree
+        self.homing_steps = 20000 #increment homing moves by 1 degree (20000 steps at 500 microstep)
+        self.homing_x_time = 1  #home for increments of 1 second
+        self.homing_y_time = 1  #home for increments of 1 second
         
         self.coarse_track_start = False
         self.coarse_track_in_progess = False
-        self.coarse_track_complete = True
         self.coarse_settle_t = 1
         self.coarse_vel = 80000
         
@@ -532,11 +531,13 @@ class SS_tracking:
             #Flag ptu limits if software limits exceeded
             if self.ptu_position_x > self.ptu_pos_limit:
                 self.ptu_pos_limit_flag = True
+                print('Software limit exceeded in X-axis, I will go home now')
             else:
                 self.ptu_pos_limit_flag = False
                 
             if self.ptu_position_y < self.ptu_neg_limit:
                 self.ptu_neg_limit_flag = True
+                print('Software limit exceeded in Y-axis, I will go home now')
             else:
                 self.ptu_pos_limit_flag = False
                 
@@ -621,17 +622,13 @@ class SS_tracking:
             
             self.t2 = time.time()
 
-##################### Startup Homing Logic ####################################
-            #Right now, the only condition that triggers homing is the first tracking run
-            if self.cnt == 0: 
+##################### Homing Logic ############################################
+            #Home on startup (cnt=0) and if software ptu limits exceeeded
+            if self.ptu_pos_limit_flag | self.ptu_neg_limit_flag | self.cnt == 0: 
                self.homing_x_start = True
                self.homing_y_start = True
-               self.homing_x_in_progress = False
-               self.homing_y_in_progress = False
                self.homing_timer_x_done = True
                self.homing_timer_y_done = True
-               self.homing_x_time = 1  #home for increments of 1 second
-               self.homing_y_time = 1  #home for increments of 1 second
                
             if self.homing_x_start:
                 print('Homing in X-axis begins now')
