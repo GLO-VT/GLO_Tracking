@@ -144,6 +144,11 @@ class SS_tracking:
         self.coarse_settle_t = 1
         self.coarse_vel = 80000
         
+        self.ptu_pos_limit = 45*20000  #positive software limit for ptu
+        self.ptu_neg_limit = -45*20000  #positive software limit for ptu
+        self.ptu_pos_limit_flag = False
+        self.ptu_neg_limit_flag = False
+        
         self.t1=999
         self.t2=999
         self.t3=999
@@ -205,7 +210,11 @@ class SS_tracking:
                                           'pid_out_y',
                                           'pid_x_dt',
                                           'pid_y_dt',
-                                          'coarse_track_in_progress'
+                                          'homing_x_in_progress',
+                                          'homing_y_in_progress',
+                                          'coarse_track_in_progress',
+                                          'ptu_pos_limit',
+                                          'ptu_neg_limit'
                                            ])
         
 #    def setup_ptu(self):
@@ -515,20 +524,26 @@ class SS_tracking:
 #                    offset = self.sine_wave()
 #                    ang_x[i-1] = self.ss[i-1].ang_x_raw + offset
 #                    ang_y[i-1] = self.ss[i-1].ang_y_raw + offset
-            self.ptu_pos_x = int(self.ptu_position(axis='x')) 
-            self.ptu_pos_y = int(self.ptu_position(axis='y')) 
+
+######################## Record PTU position/check software limits ############
+            self.ptu_position_x = int(self.ptu_position(axis='x')) 
+            self.ptu_position_y = int(self.ptu_position(axis='y')) 
+            
+            #Flag ptu limits if software limits exceeded
+            if self.ptu_position_x > self.ptu_pos_limit:
+                self.ptu_pos_limit_flag = True
+            else:
+                self.ptu_pos_limit_flag = False
+                
+            if self.ptu_position_y < self.ptu_neg_limit:
+                self.ptu_neg_limit_flag = True
+            else:
+                self.ptu_pos_limit_flag = False
+                
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
             self.ss_mean_x = np.nanmean(ang_x)
             self.ss_mean_y = np.nanmean(ang_y)
-            
-#            #Take geometric mean of all sun sensors listed in ss_track
-#            num_x = np.count_nonzero(~np.isnan(ang_x)) #count number of non-nan elements in ang_x
-#            num_y = np.count_nonzero(~np.isnan(ang_y)) #count number of non-nan elements in ang_y
-#            self.ss_mean_x = np.nanprod(ang_x)**(1./num_x) #geometric mean
-#            self.ss_mean_y = np.nanprod(ang_y)**(1./num_y) #geometric mean
-            
-            #Read current PTU position - need to implement, see genie_track_newmark.py
             
             #Read current IMU values (IMU filters values internally)
             try:
@@ -547,7 +562,7 @@ class SS_tracking:
             
             #Now cycle through the rest of filter weights in filter_kern 
             if len(self.filter_kern) > 1:  #if filter window size = 1, then do no filtering
-                if self.cnt > len(self.filter_kern):  #wait until enough samples are available to filter  
+                if self.cnt >= len(self.filter_kern):  #wait until enough samples are available to filter  
                     #loop through the rest of the filter kernel and multiply the 
                     #weights by the appropriate indices of the past ss_mean_x and ss_mean_y values
                     for i in np.arange(-1,-len(self.filter_kern),-1):
@@ -562,7 +577,7 @@ class SS_tracking:
 ######################## PID Controller #######################################
             #Use ss_filt_x and ss_filt_y as input to PID controller to generate PID output
             try:
-                if (self.ss_filt_x > -self.fine_track_limit) & (self.ss_filt_x < -self.fine_track_limit) & self.sun_in_fov:
+                if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit) & self.sun_in_fov:
                     self.pid_out_x,self.pid_y_dt = self.pid_x.GenOut(self.ss_filt_x,self.cnt)  #generate x-axis control output in "degrees"
                     print(self.cnt,self.pid_out_x)
                     #Track mode 3: use differential velocity control (last speed + pid output)
@@ -609,24 +624,32 @@ class SS_tracking:
 ##################### Startup Homing Logic ####################################
             #Right now, the only condition that triggers homing is the first tracking run
             if self.cnt == 0: 
-               self.homing_start = True
-               self.homing_x_complete = False
-               self.homing_y_complete = False
+               self.homing_x_start = True
+               self.homing_y_start = True
+               self.homing_x_in_progress = False
+               self.homing_y_in_progress = False
                self.homing_timer_x_done = True
                self.homing_timer_y_done = True
                self.homing_x_time = 1  #home for increments of 1 second
                self.homing_y_time = 1  #home for increments of 1 second
                
-            if self.homing_start:
-                self.homing_start = False
+            if self.homing_x_start:
+                print('Homing in X-axis begins now')
+                self.homing_x_start = False
+                self.homing_x_in_progress = True
                 self.homing_x_cnt = 1
-                self.homing_y_cnt = 1
                 if self.track_x:
                     self.ptu_stop(axis='x')
+                    
+            if self.homing_y_start:
+                print('Homing in Y-axis begins now')
+                self.homing_y_start = False
+                self.homing_y_in_progress = True
+                self.homing_y_cnt = 1
                 if self.track_y:
                     self.ptu_stop(axis='y')
             
-            if ~self.homing_x_complete:
+            if self.homing_x_in_progress:
                 if self.track_x:
                     if self.homing_timer_x_done:
                         if self.homing_x_cnt % 2 != 0:   
@@ -639,12 +662,15 @@ class SS_tracking:
                         if (time.time() - self.homing_timer_x_start) > self.homing_x_cnt*self.homing_x_time:
                             self.homing_timer_x_done = True
                             if np.abs(int(self.ptu_position(axis='x'))) < 100:  #if position if within +/- 100 steps, call it home
-                                self.homing_x_complete = True
+                                self.homing_x_in_progress = False
                                 self.ptu_stop(axis='x')
+                                print('X-axis made it home to grandmas house, hooray!')
                             else:
                                 self.homing_x_cnt+=1
+                                self.ptu_stop(axis='x')
+                                print('X-axis did not find home yet, incrementing homing counter to',self.homing_x_cnt)
                             
-            if ~self.homing_y_complete:
+            if self.homing_y_in_progress:
                 if self.track_y:
                     if self.homing_timer_y_done:
                         if self.homing_y_cnt % 2 != 0:   
@@ -657,21 +683,23 @@ class SS_tracking:
                         if (time.time() - self.homing_timer_y_start) > self.homing_y_cnt*self.homing_y_time:
                             self.homing_timer_y_done = True
                             if np.abs(int(self.ptu_position(axis='y'))) < 100:  #if position if within +/- 100 steps, call it home
-                                self.homing_y_complete = True
+                                self.homing_y_in_progress = False
                                 self.ptu_stop(axis='y')
+                                print('Y-axis made it home to grandmas house, hooray!')
                             else:
                                 self.homing_y_cnt+=1
+                                self.ptu_stop(axis='y')
+                                print('Y-axis did not find home yet, incrementing homing counter to',self.homing_y_cnt)
         
 ##################### Coarse Tracking Logic ###################################            
             if self.cnt == 0: 
                 self.coarse_track_start = False
                 self.coarse_track_in_progess = False
-                self.coarse_track_complete = True
                 self.coarse_settle_t = 1
                 self.coarse_vel = 80000
            
             #Check all conditions that can trigger coarse tracking
-            if (self.homing_x_complete & self.homing_y_complete & self.coarse_track_complete):
+            if (~self.homing_x_in_progress & ~self.homing_y_in_progress & ~self.coarse_track_in_progress):
                 if ~self.sun_in_fov:
                     self.coarse_track_start = True
                 if (self.ss_filt_x < -self.fine_track_limit) | (self.ss_filt_x > self.fine_track_limit) | (self.ss_filt_x == np.nan):
@@ -680,18 +708,12 @@ class SS_tracking:
                     self.coarse_track_start = True
             
             #Start coarse tracking
-            if (self.homing_x_complete & self.homing_y_complete & self.coarse_track_start):
+            if (~self.homing_x_in_progress & ~self.homing_y_in_progress & self.coarse_track_start):
+                print('Begin Coarse tracking')
                 self.coarse_track_in_progess = True
-                self.coarse_track_complete = False
-                if self.track_x:
-                    self.ptu_stop(axis='x')
-                    self.ptu_set_speed(self.coarse_vel,axis='x')
-                if self.track_y:
-                    self.ptu_stop(axis='y')
-                    self.ptu_set_speed(self.coarse_vel,axis='y')
-                    
                 if self.ss[3].sun_in_fov: #check if sun in fov of coarse SS
                     #convert coarse ss degree offsets to PTU pan, tilt commands (pan is the same as x_off)
+                    print('Coarse sun sensor can see the sun, calculating offset')
                     x_off_rad = ang_x[3]*np.pi/180.
                     y_off_rad = ang_y[3]*np.pi/180.
                     z = np.arctan(np.sqrt(np.tan(x_off_rad)**2 + np.tan(y_off_rad)**2))
@@ -705,26 +727,34 @@ class SS_tracking:
                     #Calculate time required to move desired number of steps
                     self.coarse_move_time_x = np.abs(int(self.coarse_steps_x/self.coarse_vel))
                     self.coarse_move_time_y = np.abs(int(self.coarse_steps_y/self.coarse_vel))
+                    
+                    print('Coarse sun sensor offset x=',ang_x[3],'y=',ang_y[3])
+                    print('Coarse pan/tilt angles, pan=',self.coarse_pan,'tilt=',self.coarse_tilt)
+                    print('Coarse pan/tilt steps, pan=',self.coarse_steps_x,'tilt=',self.coarse_steps_y)
+                    print('Coarse pan/tilt move time, pan=',self.coarse_move_time_x,'tilt=',self.coarse_move_time_y)
 
                     #Send poistion commands to PTU
                     #x-axis commands
                     if self.track_x:
-                        self.ptu_x.cmd('@01SSPD'+str(self.coarse_vel)+'\r')
+                        print('Coarse tracking in X-axis, hold on tight')
+                        self.ptu_stop(axis='x')
+                        self.ptu_set_speed(self.coarse_vel,axis='x')
                         self.ptu_x.cmd('@01ABS\r')
                         self.ptu_x.cmd('X'+str(self.coarse_steps_x)+'\r')
                     
                     #y-axis commands
                     if self.track_y:
-                        self.ptu_x.cmd('@01SSPD'+str(self.coarse_vel)+'\r')
+                        print('Coarse tracking in Y-axis, hold on tight')
+                        self.ptu_stop(axis='y')
+                        self.ptu_set_speed(self.coarse_vel,axis='y')
                         self.ptu_y.cmd('@01ABS\r')
                         self.ptu_y.cmd('X'+str(self.coarse_steps_y)+'\r')
                     
                     self.coarse_track_t_start = time.time()
                     
-                    #Sleep for the higher of the two move times
+                    #Create a timer for the higher of the two move times
                     self.coarse_track_delay = max(self.coarse_move_time_x,self.coarse_move_time_y) + self.coarse_settle_t
-                    print('coarse track delay',self.coarse_track_delay)
-                    print('coarse_steps_x',self.coarse_steps_x)
+                    print('coarse track delay=',self.coarse_track_delay)
                     
                     self.coarse_track_start = False
                 
@@ -737,23 +767,22 @@ class SS_tracking:
                         self.ptu_stop(axis='y')
                     
                     self.coarse_track_start = True  #Remain in coarse tracking until sun in fov of coarse sun sensor
-                    self.coarse_track_complete = True  #Need this to reset coarse tracking
+                    self.coarse_track_in_progess = True
             
             #Coarse track is completed after coarse timer expires and sun is within limits of fine sun sensors
-            if ~self.coarse_track_complete:
-                if self.coarse_track_in_progess:
-                    if (time.time() - self.coarse_track_t_start) > (self.coarse_track_delay + self.coarse_settle_t):
-                        if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit):
+            if self.coarse_track_in_progess:
+                if (time.time() - self.coarse_track_t_start) > (self.coarse_track_delay + self.coarse_settle_t):
+                    if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit):
                             if (-self.fine_track_limit < self.ss_filt_y < self.fine_track_limit):
-                                self.coarse_track_complete = True
+                                print('Coarse track successful, you are welcome')
                                 self.coarse_track_in_progess = False
-                        else:
-                           self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
-                           self.coarse_track_complete = True  #Need this to reset coarse tracking
+                    else:
+                        print('Coarse track timer expired, but sun is still not within fine sun sensor limits of +/-',self.fine_track_limit,'degrees, Restarting Coarse Track')
+                        self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
                        
 ##################### PTU Logic - Fine Tracking ###############################
             #Implement 'switch direction' logic for newmark PTU x-axis
-            if (self.homing_x_complete & self.homing_y_complete & ~self.coarse_track_in_progess):  #No fine tracking PTU commands during homing or coarse tracking
+            if (~self.homing_x_in_progress & ~self.homing_y_in_progress & ~self.coarse_track_in_progess):  #No fine tracking PTU commands during homing or coarse tracking
                 if self.track_x:
                     self.t6 = time.time()
                     if (self.ptu_dir_x < 0):
@@ -889,8 +918,8 @@ class SS_tracking:
                         ang_y[3],
                         self.ptu_cmd_x,
                         self.ptu_cmd_y,
-                        self.ptu_pos_x,  
-                        self.ptu_pos_y,
+                        self.ptu_position_x,  
+                        self.ptu_position_y,
                         self.ptu_dir_x,
                         self.ptu_dir_y,
                         self.imu_accel.x,
@@ -923,7 +952,11 @@ class SS_tracking:
                         self.pid_out_y,
                         self.pid_x_dt,
                         self.pid_y_dt,
-                        self.coarse_track_in_progess
+                        self.homing_x_in_progress,
+                        self.homing_y_in_progress,
+                        self.coarse_track_in_progess,
+                        self.ptu_pos_limit_flag,
+                        self.ptu_neg_limit_flag
                         ]
 #            except:
 #                #print('Could not grab IMU data accel, ypr, and mag, cnt=',self.cnt)
