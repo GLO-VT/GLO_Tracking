@@ -139,12 +139,16 @@ class SS_tracking:
         self.homing_y_time = 1  #home for increments of 1 second
         
         self.coarse_track_start = False
-        self.coarse_track_in_progess = False
+        self.coarse_track_in_progress = False
+
+
         self.coarse_settle_t = 1
-        self.coarse_vel = 80000
+        self.coarse_vel = 20000
         
-        self.ptu_pos_limit = 45*20000  #positive software limit for ptu
-        self.ptu_neg_limit = -45*20000  #positive software limit for ptu
+        self.ptu_pos_limit = 45*20000  #positive software limit for ptu +45 deg
+        self.ptu_neg_limit = -45*20000  #positive software limit for ptu - 45 deg
+        self.ptu_pos_limit = 450000*20000  #comment this line out to use real software limits
+        self.ptu_neg_limit = -450000*20000  #comment this line out to use real software limits
         self.ptu_pos_limit_flag = False
         self.ptu_neg_limit_flag = False
         
@@ -543,8 +547,8 @@ class SS_tracking:
                 
 ######################## Take Mean of Fine Sun Sensors ########################           
 #            #Take arithmetic mean of all sun sensors listed in ss_track
-            self.ss_mean_x = np.nanmean(ang_x)
-            self.ss_mean_y = np.nanmean(ang_y)
+            self.ss_mean_x = np.nanmean(ang_x[0:3])
+            self.ss_mean_y = np.nanmean(ang_y[0:3])
             
             #Read current IMU values (IMU filters values internally)
             try:
@@ -609,7 +613,7 @@ class SS_tracking:
                     if self.track_mode == 4:
                         self.ptu_cmd_y = self.pid_out_y*self.pid_y.deg2pos  #ignore IMU data if nan
                 else:
-                    print('Sun sensor y-axis outside FOV, cnt=',self.cnt)
+                    #print('Sun sensor y-axis outside FOV, cnt=',self.cnt)
                     self.pid_out_y = np.nan
                     self.ptu_cmd_y = np.nan  
                                    
@@ -625,11 +629,17 @@ class SS_tracking:
 ##################### Homing Logic ############################################
             #Home on startup (cnt=0) and if software ptu limits exceeeded
             if self.ptu_pos_limit_flag | self.ptu_neg_limit_flag | self.cnt == 0: 
-               self.homing_x_start = True
-               self.homing_y_start = True
                self.homing_timer_x_done = True
                self.homing_timer_y_done = True
-               
+               self.homing_x_start = True  
+               self.homing_y_start = True  
+
+            #Comment out the following 4 lines to enable startup homing
+            self.homing_x_start = False  #This will disable startup homing!
+            self.homing_y_start = False  #This will disable startup homing!  
+            self.homing_x_in_progress = False
+            self.homing_y_in_progress = False
+            
             if self.homing_x_start:
                 print('Homing in X-axis begins now')
                 self.homing_x_start = False
@@ -637,6 +647,7 @@ class SS_tracking:
                 self.homing_x_cnt = 1
                 if self.track_x:
                     self.ptu_stop(axis='x')
+                    self.ptu_set_speed(self.homing_vel,axis='x')
                     
             if self.homing_y_start:
                 print('Homing in Y-axis begins now')
@@ -645,6 +656,7 @@ class SS_tracking:
                 self.homing_y_cnt = 1
                 if self.track_y:
                     self.ptu_stop(axis='y')
+                    self.ptu_set_speed(self.homing_vel,axis='y')
             
             if self.homing_x_in_progress:
                 if self.track_x:
@@ -691,7 +703,7 @@ class SS_tracking:
 ##################### Coarse Tracking Logic ###################################            
             if self.cnt == 0: 
                 self.coarse_track_start = False
-                self.coarse_track_in_progess = False
+                self.coarse_track_in_progress = False
                 self.coarse_settle_t = 1
                 self.coarse_vel = 80000
            
@@ -705,81 +717,83 @@ class SS_tracking:
                     self.coarse_track_start = True
             
             #Start coarse tracking
-            if (~self.homing_x_in_progress & ~self.homing_y_in_progress & self.coarse_track_start):
-                print('Begin Coarse tracking')
-                self.coarse_track_in_progess = True
-                if self.ss[3].sun_in_fov: #check if sun in fov of coarse SS
-                    #convert coarse ss degree offsets to PTU pan, tilt commands (pan is the same as x_off)
-                    print('Coarse sun sensor can see the sun, calculating offset')
-                    x_off_rad = ang_x[3]*np.pi/180.
-                    y_off_rad = ang_y[3]*np.pi/180.
-                    z = np.arctan(np.sqrt(np.tan(x_off_rad)**2 + np.tan(y_off_rad)**2))
-                    self.coarse_pan = self.ang_x[3]  #pan is same as raw coarse ss x_offset
-                    self.coarse_tilt = np.arcsin(np.cos(z)*np.tan(y_off_rad))*180/np.pi
-                    
-                    #Calculate number of steps required for each axis
-                    self.coarse_steps_x = self.coarse_pan*self.pid_x.deg2pos
-                    self.coarse_steps_y = self.coarse_tilt*self.pid_y.deg2pos
-                    
-                    #Calculate time required to move desired number of steps
-                    self.coarse_move_time_x = np.abs(int(self.coarse_steps_x/self.coarse_vel))
-                    self.coarse_move_time_y = np.abs(int(self.coarse_steps_y/self.coarse_vel))
-                    
-                    print('Coarse sun sensor offset x=',ang_x[3],'y=',ang_y[3])
-                    print('Coarse pan/tilt angles, pan=',self.coarse_pan,'tilt=',self.coarse_tilt)
-                    print('Coarse pan/tilt steps, pan=',self.coarse_steps_x,'tilt=',self.coarse_steps_y)
-                    print('Coarse pan/tilt move time, pan=',self.coarse_move_time_x,'tilt=',self.coarse_move_time_y)
-
-                    #Send poistion commands to PTU
-                    #x-axis commands
-                    if self.track_x:
-                        print('Coarse tracking in X-axis, hold on tight')
-                        self.ptu_stop(axis='x')
-                        self.ptu_set_speed(self.coarse_vel,axis='x')
-                        self.ptu_x.cmd('@01ABS\r')
-                        self.ptu_x.cmd('X'+str(self.coarse_steps_x)+'\r')
-                    
-                    #y-axis commands
-                    if self.track_y:
-                        print('Coarse tracking in Y-axis, hold on tight')
-                        self.ptu_stop(axis='y')
-                        self.ptu_set_speed(self.coarse_vel,axis='y')
-                        self.ptu_y.cmd('@01ABS\r')
-                        self.ptu_y.cmd('X'+str(self.coarse_steps_y)+'\r')
-                    
-                    self.coarse_track_t_start = time.time()
-                    
-                    #Create a timer for the higher of the two move times
-                    self.coarse_track_delay = max(self.coarse_move_time_x,self.coarse_move_time_y) + self.coarse_settle_t
-                    print('coarse track delay=',self.coarse_track_delay)
-                    
+            if self.cnt == 0:
+                if (~self.homing_x_in_progress & ~self.homing_y_in_progress & self.coarse_track_start):
+                    print('Begin Coarse tracking')
+                    self.coarse_track_in_progress = True
                     self.coarse_track_start = False
-                
-                else:
-                    #If Coarse sun sensor does not see sun, stop PTU in both axes
-                    print('Coarse Sun sensor does not see the sun, abandon ship!')
-                    if self.track_x:
-                        self.ptu_stop(axis='x')
-                    if self.track_y:
-                        self.ptu_stop(axis='y')
+                    if self.ss[3].sun_in_fov: #check if sun in fov of coarse SS
+                        #convert coarse ss degree offsets to PTU pan, tilt commands (pan is the same as x_off)
+                        print('Coarse sun sensor can see the sun, calculating offset')
+                        x_off_rad = ang_x[3]*np.pi/180.
+                        y_off_rad = -ang_y[3]*np.pi/180.
+                        z = np.arctan(np.sqrt(np.tan(x_off_rad)**2 + np.tan(y_off_rad)**2))
+                        self.coarse_pan = ang_x[3]  #pan is same as raw coarse ss x_offset
+                        self.coarse_tilt = np.arcsin(np.cos(z)*np.tan(y_off_rad))*180/np.pi
+                        
+                        #Calculate number of steps required for each axis
+                        self.coarse_steps_x = self.coarse_pan*self.pid_x.deg2pos
+                        self.coarse_steps_y = self.coarse_tilt*self.pid_y.deg2pos
+                        
+                        #Calculate time required to move desired number of steps
+                        self.coarse_move_time_x = np.abs(float(self.coarse_steps_x/self.coarse_vel))
+                        self.coarse_move_time_y = np.abs(float(self.coarse_steps_y/self.coarse_vel))
+                        
+                        print('Coarse sun sensor offset x=',ang_x[3],'y=',ang_y[3])
+                        print('Coarse pan/tilt angles, pan=',self.coarse_pan,'tilt=',self.coarse_tilt)
+                        print('Coarse pan/tilt steps, pan=',self.coarse_steps_x,'tilt=',self.coarse_steps_y)
+                        print('Coarse pan/tilt move time, pan=',self.coarse_move_time_x,'tilt=',self.coarse_move_time_y)
+    
+                        #Send poistion commands to PTU
+                        #x-axis commands
+                        if self.track_x:
+                            print('Coarse tracking in X-axis, hold on tight')
+                            self.ptu_stop(axis='x')
+                            self.ptu_set_speed(self.coarse_vel,axis='x')
+                            self.ptu_x.cmd('@01ABS\r')
+                            self.ptu_x.cmd('@01X'+str(self.coarse_steps_x/2.0)+'\r')
+                        
+                        #y-axis commands
+                        if self.track_y:
+                            print('Coarse tracking in Y-axis, hold on tight')
+                            self.ptu_stop(axis='y')
+                            self.ptu_set_speed(self.coarse_vel,axis='y')
+                            self.ptu_y.cmd('@01ABS\r')
+                            self.ptu_y.cmd('@01X'+str(self.coarse_steps_y)+'\r')
+                        
+                        self.coarse_track_t_start = time.time()
+                        
+                        #Create a timer for the higher of the two move times
+                        self.coarse_track_delay = max(self.coarse_move_time_x,self.coarse_move_time_y) + self.coarse_settle_t
+                        print('coarse track delay=',self.coarse_track_delay)
+                        
+                        self.coarse_track_start = False
                     
-                    self.coarse_track_start = True  #Remain in coarse tracking until sun in fov of coarse sun sensor
-                    self.coarse_track_in_progess = True
+                    else:
+                        #If Coarse sun sensor does not see sun, stop PTU in both axes
+                        print('Coarse Sun sensor does not see the sun, abandon ship!')
+                        if self.track_x:
+                            self.ptu_stop(axis='x')
+                        if self.track_y:
+                            self.ptu_stop(axis='y')
+                        
+                        self.coarse_track_start = True  #Remain in coarse tracking until sun in fov of coarse sun sensor
+                        self.coarse_track_in_progress = True
             
             #Coarse track is completed after coarse timer expires and sun is within limits of fine sun sensors
-            if self.coarse_track_in_progess:
+            if self.coarse_track_in_progress:
                 if (time.time() - self.coarse_track_t_start) > (self.coarse_track_delay + self.coarse_settle_t):
                     if (-self.fine_track_limit < self.ss_filt_x < self.fine_track_limit):
                             if (-self.fine_track_limit < self.ss_filt_y < self.fine_track_limit):
                                 print('Coarse track successful, you are welcome')
-                                self.coarse_track_in_progess = False
-                    else:
-                        print('Coarse track timer expired, but sun is still not within fine sun sensor limits of +/-',self.fine_track_limit,'degrees, Restarting Coarse Track')
-                        self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
-                       
+                                self.coarse_track_in_progress = False
+                else:
+                    print('Coarse track timer expired, but sun is still not within fine sun sensor limits of +/-',self.fine_track_limit,'degrees, Restarting Coarse Track')
+                    self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
+                   
 ##################### PTU Logic - Fine Tracking ###############################
             #Implement 'switch direction' logic for newmark PTU x-axis
-            if (~self.homing_x_in_progress & ~self.homing_y_in_progress & ~self.coarse_track_in_progess):  #No fine tracking PTU commands during homing or coarse tracking
+            if (~self.homing_x_in_progress & ~self.homing_y_in_progress & ~self.coarse_track_in_progress):  #No fine tracking PTU commands during homing or coarse tracking
                 if self.track_x:
                     self.t6 = time.time()
                     if (self.ptu_dir_x < 0):
@@ -951,7 +965,7 @@ class SS_tracking:
                         self.pid_y_dt,
                         self.homing_x_in_progress,
                         self.homing_y_in_progress,
-                        self.coarse_track_in_progess,
+                        self.coarse_track_in_progress,
                         self.ptu_pos_limit_flag,
                         self.ptu_neg_limit_flag
                         ]
@@ -1054,7 +1068,7 @@ if __name__ == '__main__':
                         help='show display')
     
     parser.add_argument('-t','--track_time',
-                        default=5,
+                        default=60,
                         type=float,
                         help='Total time to track (seconds)')
     
@@ -1127,6 +1141,11 @@ if __name__ == '__main__':
                         type=bool,
                         help='Read data from SS3 (True/False)')
     
+    parser.add_argument('-ss4_r','--ss4_read',
+                        default=True,
+                        type=bool,
+                        help='Read data from SS3 (True/False)')
+    
     parser.add_argument('-ss1','--ss1_track',
                         default=True,
                         type=bool,
@@ -1141,6 +1160,11 @@ if __name__ == '__main__':
                         default=False,
                         type=bool,
                         help='Track with SS3 (True/False)')
+    
+    parser.add_argument('-ss4','--ss4_track',
+                        default=True,
+                        type=bool,
+                        help='Track with SS4 (True/False)')
 
 #    ss_eshim_x = [-1.763, -1.547, -1.578]          #Specify electronic shims (x-dir) for sun sensors
 #    ss_eshim_y = [-2.290, -2.377, -2.215]          #Specify electronic shims (y-dir) for sun sensors   
@@ -1159,6 +1183,11 @@ if __name__ == '__main__':
                         type=float,
                         help='SS3 electronic shim x-axis')
     
+    parser.add_argument('-ss4_ex','--ss4_eshim_x',
+                        default=0.0,
+                        type=float,
+                        help='SS4 electronic shim x-axis')
+    
     parser.add_argument('-ss1_ey','--ss1_eshim_y',
                         default=0.0,
                         type=float,
@@ -1174,13 +1203,18 @@ if __name__ == '__main__':
                         type=float,
                         help='SS3 electronic shim y-axis')
     
+    parser.add_argument('-ss4_ey','--ss4_eshim_y',
+                        default=0.0,
+                        type=float,
+                        help='SS4 electronic shim y-axis')
+    
     parser.add_argument('-ss1_c','--ss1_com_port',
                         default='COM6',
                         type=str,
                         help='SS1 comm port')
     
     parser.add_argument('-ss2_c','--ss2_com_port',
-                        default='COM4',
+                        default='COM99',  #Set to COM4
                         type=str,
                         help='SS2 com port')
     
@@ -1188,6 +1222,11 @@ if __name__ == '__main__':
                         default='COM8',
                         type=str,
                         help='SS3 com port')
+    
+    parser.add_argument('-ss4_c','--ss4_com_port',
+                        default='COM4',
+                        type=str,
+                        help='SS4 com port')
     
     parser.add_argument('-ss1_b','--ss1_baud_rate',
                         default=115200,
@@ -1204,6 +1243,11 @@ if __name__ == '__main__':
                         type=int,
                         help='SS3 baud_rate')
     
+    parser.add_argument('-ss4_b','--ss4_baud_rate',
+                        default=115200,
+                        type=int,
+                        help='SS4 baud_rate')
+    
     parser.add_argument('-ss1_i','--ss1_inst_id',
                         default=1,
                         type=int,
@@ -1218,6 +1262,11 @@ if __name__ == '__main__':
                         default=3,
                         type=int,
                         help='SS3 instrument id')
+    
+    parser.add_argument('-ss4_i','--ss4_inst_id',
+                        default=4,
+                        type=int,
+                        help='SS4 instrument id')
     
 ###### IMU parameters ###########
     parser.add_argument('-imu_c','--imu_com_port',
@@ -1335,7 +1384,8 @@ if __name__ == '__main__':
     #Establish communication with sun sensor/s - store in a list
     ss=[SS(inst_id=params.ss1_inst_id,com_port=params.ss1_com_port,baudrate=params.ss1_baud_rate),
         SS(inst_id=params.ss2_inst_id,com_port=params.ss2_com_port,baudrate=params.ss2_baud_rate),
-        SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate)]
+        SS(inst_id=params.ss3_inst_id,com_port=params.ss3_com_port,baudrate=params.ss3_baud_rate),
+        SS(inst_id=params.ss4_inst_id,com_port=params.ss4_com_port,baudrate=params.ss4_baud_rate)]
     
     #List of sun sensors to read data from
     ss_read = []
@@ -1345,6 +1395,8 @@ if __name__ == '__main__':
         ss_read.append(2)
     if params.ss3_read:
         ss_read.append(3)
+    if params.ss4_read:
+        ss_read.append(4)
     
     #List of sun sensors to use for tracking (also need to check if data is being read from sensor)
     ss_track = []
@@ -1357,14 +1409,19 @@ if __name__ == '__main__':
     if params.ss3_read:
         if params.ss3_track:
             ss_track.append(3)
+    if params.ss4_read:
+        if params.ss4_track:
+            ss_track.append(4)
     
 
     print('eshims_x',[params.ss1_eshim_x,
                       params.ss2_eshim_x,
-                      params.ss3_eshim_x])
+                      params.ss3_eshim_x,
+                      params.ss4_eshim_x])
     print('eshims_y',[params.ss1_eshim_y,
                       params.ss2_eshim_y,
-                      params.ss3_eshim_y])
+                      params.ss3_eshim_y,
+                      params.ss4_eshim_y])
     
     #Establish communication with IMU
     imu=IMU(com_port=params.imu_com_port,baudrate=params.imu_baud_rate)
@@ -1408,10 +1465,12 @@ if __name__ == '__main__':
                               ss_track=ss_track,
                               ss_eshim_x=[params.ss1_eshim_x,
                                           params.ss2_eshim_x,
-                                          params.ss3_eshim_x], 
+                                          params.ss3_eshim_x,
+                                          params.ss4_eshim_x], 
                               ss_eshim_y=[params.ss1_eshim_y,
                                           params.ss2_eshim_y,
-                                          params.ss3_eshim_y],
+                                          params.ss3_eshim_y,
+                                          params.ss4_eshim_y],
                               filter_kern=params.filter_kern,
                               pid_x=pid_x,
                               pid_y=pid_y,
