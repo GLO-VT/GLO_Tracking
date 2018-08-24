@@ -54,6 +54,7 @@ step_x = scan_increment*deg2pos
 step_y = scan_increment*deg2pos
 sleep_x = step_x/scan_speed
 sleep_y = step_y/scan_speed
+extra_delay=0.5
 
 def scan_check_fov(self):
     ss1.read_data_all()
@@ -79,28 +80,33 @@ def scan_check_fov(self):
         return True
 
 scan_in_progress=True
+ptu_x.cmd('@01ABS\r')
+ptu_x.cmd('@01X'+str(init_pos_x)+'\r')
+time.sleep(init_pos_x/scan_speed + extra_delay)
+ptu_x.cmd('@01X'+str(init_pos_y)+'\r')
+time.sleep(init_pos_y/scan_speed + extra_delay)
 for i in range(8):
     if i % 2 == 1:
         if scan_in_progress:
             ptu_y.cmd(i,'@01X'+str(i*step_y)+'\r')
             print('@01X'+str(i*step_y)+'\r')
-            time.sleep(sleep_y)
+            time.sleep(sleep_y + extra_delay)
             scan_in_progress = scan_check_fov()
         if scan_in_progress:
             ptu_x.cmd(i,'@01X'+str(i*step_x)+'\r')
             print('@01X'+str(i*step_x)+'\r')
-            time.sleep(sleep_x)
+            time.sleep(sleep_x + extra_delay)
             scan_in_progress = scan_check_fov()
     else:
         if scan_in_progress:
             ptu_y.cmd(i,'@01X'+str(-i*step_y)+'\r')
             print('@01X'+str(-i*step_y)+'\r')
-            time.sleep(sleep_y)
+            time.sleep(sleep_y + extra_delay)
             scan_in_progress = scan_check_fov()
         if scan_in_progress:
             ptu_x.cmd('@01X'+str(-i*step_x)+'\r')
             print(i,'@01X'+str(-i*step_x)+'\r')
-            time.sleep(sleep_x)
+            time.sleep(sleep_x + extra_delay)
             scan_in_progress = scan_check_fov()
         
 
