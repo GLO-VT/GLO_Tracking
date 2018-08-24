@@ -790,7 +790,62 @@ class SS_tracking:
                 else:
                     print('Coarse track timer expired, but sun is still not within fine sun sensor limits of +/-',self.fine_track_limit,'degrees, Restarting Coarse Track')
                     self.coarse_track_start = True  #Remain in coarse tracking until sun within limits of fine tracking
-                   
+
+##################### Scan Routine (If Coarse Track does not work, try this) ##
+                    
+#self.scan_speed = 80000
+#self.scan_increment = 7.5  #degrees for each grid block
+#self.scan_x_count = 1
+#self.scan_y_count = 1
+#self.scan_detect_limit = 4
+#deg2pos=20000
+#
+#
+#
+#self.ptu_x.cmd('@01SSPD'+str(self.scan_speed)+'\r')
+#self.ptu_y.cmd('@01SSPD'+str(self.scan_speed)+'\r')
+#
+#init_pos_x = 0
+#init_pos_y = 22.5*deg2pos
+#step_x = self.scan_increment*self.ptu_x.deg2pos
+#step_y = self.scan_increment*self.ptu_y.deg2pos
+#sleep_x = step_x/self.scan_speed
+#sleep_y = step_y/self.scan_speed
+#
+#def scan_check_fov(self):
+#    self.ss[0].read_data_all()
+#    ang_x = self.ss[0].ang_x_raw + self.ss_eshim_x[0]
+#    ang_y = self.ss[0].ang_y_raw + self.ss_eshim_y[0]
+#    if ss[0].sun_in_fov:
+#        steps_x = int(ang_x*self.ptu_x.deg2pos)
+#        steps_y = int(ang_y*self.ptu_y.deg2pos)
+#        self.ptu_x.cmd('@01X'+str(steps_x)+'\r')
+#        self.ptu_y.cmd('@01X'+str(steps_y)+'\r')
+#        return True
+#    else:
+#        return False
+#
+#self.scan_in_progress=True
+#for i in range(8):
+#    if i % 2 == 1:
+#        if self.scan_in_progress:
+#            self.ptu_y.cmd('@01X'+str(i*step_y)+'\r')
+#            time.sleep(sleep_y)
+#            self.scan_in_progress = self.check_fov()
+#        if self.scan_in_progress:
+#            self.ptu_x.cmd('@01X'+str(i*step_x)+'\r')
+#            time.sleep(sleep_x)
+#            self.scan_in_progress = self.check_fov()
+#    else:
+#        if self.scan_in_progress:
+#            self.ptu_y.cmd('@01X'+str(-i*step_y)+'\r')
+#            time.sleep(sleep_y)
+#            self.scan_in_progress = self.check_fov()
+#        if self.scan_in_progress:
+#            self.ptu_x.cmd('@01X'+str(-i*step_x)+'\r')
+#            time.sleep(sleep_x)
+#            self.scan_in_progress = self.check_fov()
+            
 ##################### PTU Logic - Fine Tracking ###############################
             #Implement 'switch direction' logic for newmark PTU x-axis
             if (~self.homing_x_in_progress & ~self.homing_y_in_progress & ~self.coarse_track_in_progress):  #No fine tracking PTU commands during homing or coarse tracking
